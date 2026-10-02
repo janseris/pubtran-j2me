@@ -63,6 +63,15 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
     };
     private static final int[] FILES_ATTEMPTS = {3, 1, 1, 1, 1};
 
+    /**
+     * The app's own POST calls from this (Form) screen instead of the start screen:
+     * suggest twice, then getroutesopt 3x with Odkud/Kam (or Praha -> Brno if not set).
+     * Tells a network problem of the search request apart from the start screen's UI.
+     */
+    private static final String[] POSTS = {"POST:suggest", "POST:getroutesopt"};
+    private static final int[] POSTS_ATTEMPTS = {2, 3};
+    private static final Command RUN_POSTS = new Command("Otestovat hledání (POST)", Command.ITEM, 4);
+
     /** Selectable one by one (not part of the batch). */
     private static final String[] HEAVY = {
         "www.seznam.cz",
@@ -91,6 +100,7 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
     private final StringItem runOneButton = new StringItem(null, "Otestovat server", Item.BUTTON);
     private final StringItem runAllButton = new StringItem(null, "Otestovat lehké stránky", Item.BUTTON);
     private final StringItem runFilesButton = new StringItem(null, "Otestovat pubtran a soubory", Item.BUTTON);
+    private final StringItem runPostsButton = new StringItem(null, "Otestovat hledání (POST)", Item.BUTTON);
     /** The PC running ota/ota_server.js: results are POSTed to http://<pc>/results after each run. */
     private final TextField pcField = new TextField("PC pro výsledky (prázdné = neposílat):", "192.168.137.1:8000", 64, TextField.URL);
     /** Start of the current run in lines (only that part is sent to the PC). */
@@ -135,19 +145,22 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         runOneButton.setDefaultCommand(RUN_ONE);
         runAllButton.setDefaultCommand(RUN_ALL);
         runFilesButton.setDefaultCommand(RUN_FILES);
-        Item[] focusable = {runOneButton, runAllButton, runFilesButton, transport, preset, host, pcField};
+        runPostsButton.setDefaultCommand(RUN_POSTS);
+        Item[] focusable = {runOneButton, runAllButton, runFilesButton, runPostsButton, transport, preset, host, pcField};
         for (int i = 0; i < focusable.length; i++) {
             if (focusable[i] != runOneButton) focusable[i].addCommand(RUN_ONE);
             if (focusable[i] != runAllButton) focusable[i].addCommand(RUN_ALL);
             if (focusable[i] != runFilesButton) focusable[i].addCommand(RUN_FILES);
+            if (focusable[i] != runPostsButton) focusable[i].addCommand(RUN_POSTS);
             focusable[i].setItemCommandListener(this);
         }
         runOneButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE);
-        runFilesButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
+        runPostsButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
 
         append(runOneButton);  // first focusable item -> focused when the screen opens
         append(runAllButton);
         append(runFilesButton);
+        append(runPostsButton);
         append(info);
         append(transport);
         append(preset);
@@ -248,8 +261,55 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         catch (Throwable e) { return -1; }
     }
 
+    private Place postFrom, postTo;
+
+    /** One of the app's POST calls via PubtranApi (with its timeout and phase log). */
+    private void testPost(String call, int attempt) {
+        String name = (attempt > 1 ? "#" + attempt + " " : "") + call;
+        StringBuffer line = new StringBuffer(name).append(": ");
+        setPhase("Připojení + TLS + odeslání + čekání na odpověď");
+        bytesRead = -1;
+        int t0 = now();
+        try {
+            if (call.endsWith("suggest")) {
+                java.util.Vector v = PubtranApi.suggest(attempt == 1 ? "Praha hl.n." : "Brno hl.n.", null, null);
+                if (v.size() > 0) {
+                    if (attempt == 1) postFrom = (Place) v.elementAt(0);
+                    else postTo = (Place) v.elementAt(0);
+                }
+                line.append("OK, ").append(v.size()).append(" návrhů");
+            }
+            else {
+                SearchState s = new SearchState();
+                SearchState cur = SearchState.current;
+                s.from = cur.from != null ? cur.from : postFrom;
+                s.to = cur.to != null ? cur.to : postTo;
+                if (s.from == null || s.to == null) throw new Exception("chybí Odkud/Kam");
+                java.util.Vector r = PubtranApi.search(s, s.whenString(), 0, new java.util.Vector());
+                line.append("OK, ").append(r.size()).append(" spojení (").append(s.from.name).append(" -> ").append(s.to.name).append(")");
+            }
+        }
+        catch (Throwable e) {
+            line.append("CHYBA: ").append(e.toString());
+        }
+        line.append(", ").append(now() - t0).append(" ms");
+        java.util.Vector log = RequestLog.getEntries();
+        if (log.size() > 0) {
+            LogEntry e = (LogEntry) log.elementAt(0);
+            if (e.phases != null) line.append(", fáze: ").append(e.phases);
+            line.append(", ").append(PubtranApi.formatKB(e.responseBytes));
+        }
+        if (lines.length() > 0) lines.append('\n');
+        lines.append(line);
+        results.setText(lines.toString());
+    }
+
     /** One GET https://target - timed until the status line, TLS info read before closing. */
     private void testOne(String target, int attempt) {
+        if (target.startsWith("POST:")) {
+            testPost(target.substring(5), attempt);
+            return;
+        }
         String t = target.trim();
         String scheme = "https://";
         if (t.startsWith("https://")) t = t.substring(8);
@@ -416,6 +476,7 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         if (c == RUN_ONE) start(new String[] {host.getString()});
         else if (c == RUN_ALL) start(LIGHT);
         else if (c == RUN_FILES) start(FILES, FILES_ATTEMPTS);
+        else if (c == RUN_POSTS) start(POSTS, POSTS_ATTEMPTS);
     }
 
     /**

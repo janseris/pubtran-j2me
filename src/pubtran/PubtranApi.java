@@ -231,7 +231,7 @@ public class PubtranApi {
 
     /** Sends the request via NativeHttp (StandardHTTP over HttpConnection). */
     private static byte[] sendNative(String url, Vector headers, byte[] body, LogEntry e) throws Exception {
-        NativeHttp req = new NativeHttp("POST", url);
+        final NativeHttp req = new NativeHttp("POST", url);
         StringBuffer rh = new StringBuffer("POST " + url + "\n");
         for (int i = 0; i < headers.size(); i++) {
             String[] h = (String[]) headers.elementAt(i);
@@ -265,6 +265,9 @@ public class PubtranApi {
             public void run() {
                 if (System.currentTimeMillis() - lastActivity > STALL_TIMEOUT_MS) {
                     String why = "Server neodpověděl " + (STALL_TIMEOUT_MS / 1000) + " s, požadavek zrušen";
+                    // record it now: the request thread is stuck and may never get to finish()
+                    RequestLog.persist(new java.util.Date().toString() + "  ZASEKNUTO: " + currentMethod
+                        + ", fáze: " + phases(req) + "\n");
                     PubtranApi.cancel(why, false);
                     RequestThread.stall(owner, why);
                     cancel();

@@ -63,11 +63,11 @@ public class LogScreen extends List implements CommandListener {
             setTitle("Odesílání na PC...");
             new Thread() {
                 public void run() {
+                    // the persisted log: also has requests from before an app or phone freeze
                     StringBuffer sb = new StringBuffer("=== Log požadavků, ")
                         .append(System.getProperty("microedition.platform")).append(", ")
                         .append(new java.util.Date().toString()).append(" ===\n");
-                    Vector v = RequestLog.getEntries();
-                    for (int i = 0; i < v.size(); i++) sb.append(((LogEntry) v.elementAt(i)).fullText()).append('\n');
+                    sb.append(RequestLog.loadPersisted());
                     setTitle(PcUpload.post("requestlog", sb.toString()));
                 }
             }.start();
