@@ -10,6 +10,8 @@ It is a copy of this project's **discord-j2me** fork, reusing its build toolchai
   - **Native TLS** (`NativeHttp`): `HttpConnection` (`https://`) through the TLS 1.2 patch for `SSLADAPTOR.dll`. On the 9300 it currently can't reach pubtran-backend.mapy.cz from Java (no SNI, the phone stalls; see [symbian-tls#13](https://github.com/shinovon/symbian-tls/issues/13)). Java TLS is compiled only into builds with the `JAVA_TLS` define (the signed and debug targets), which the 9300 can't use, so the phone build uses native TLS and doesn't bundle BouncyCastle (230 KB instead of 603 KB).
 - **Kept from the test screen:** the tile start page, the loading overlay with spinner and live transfer progress ("Připojování…", "4.2 KB / 12.0 KB (~1 s)"), and the request log with timing, sizes and TLS details.
 
+> **Before changing networking or loading screens, read [LESSONS_NOKIA_9300.md](LESSONS_NOKIA_9300.md)**: why Hledat hung on the phone (a full-screen repaint loop during requests) and the rules that prevent it.
+
 ## Screens
 
 | Screen | What it does | App call |
