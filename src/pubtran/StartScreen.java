@@ -231,7 +231,10 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
                 public void run() {
                     while (loading) {
                         spinnerFrame++;
-                        repaint();
+                        // only the spinner box, not the whole screen: a full repaint (tiles +
+                        // stipple) every tick kept the 9300's CPU busy while the request ran
+                        int[] b = spinnerBox();
+                        repaint(b[0], b[1], b[2], b[3]);
                         try {
                             Thread.sleep(Spinner.TICK_MS);
                         }
@@ -241,6 +244,28 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
             };
             ticker.start();
         }
+    }
+
+    /** x, y, w, h of the solid box with the spinner and the two text lines. */
+    private int[] spinnerBox() {
+        int w = getWidth();
+        int h = getHeight();
+        int size = Math.max(20, Math.min(w, h) / 4);
+        int fh = Font.getDefaultFont().getHeight();
+        int bw = Math.min(w, Math.max(size + 16, Font.getDefaultFont().stringWidth("Připojování... (getroutesopt, pokus 3)") + 16));
+        int top = h / 2 - 6 - size / 2 - 4;
+        int bh = size + 2 * fh + 16;
+        if (top + bh > h) bh = h - top;
+        return new int[] {(w - bw) / 2, top, bw, bh};
+    }
+
+    protected void paint(Graphics g) {
+        // ticker repaints cover only the spinner box: draw just the box then
+        if (loading && g.getClipHeight() < getHeight()) {
+            paintSpinnerBox(g);
+            return;
+        }
+        super.paint(g);
     }
 
     /** Dims the tiles with a stipple (no alpha blending in MIDP2) + spinner + progress. */
@@ -253,6 +278,15 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
         for (int yy = 0; yy < h; yy += 2) {
             g.drawLine(0, yy, w - 1, yy);
         }
+        paintSpinnerBox(g);
+    }
+
+    private void paintSpinnerBox(Graphics g) {
+        int w = getWidth();
+        int h = getHeight();
+        int[] b = spinnerBox();
+        g.setColor(BG_COLOR);
+        g.fillRect(b[0], b[1], b[2], b[3]);
 
         int size = Math.min(w, h) / 4;
         if (size < 20) size = 20;
