@@ -12,6 +12,28 @@ public abstract class HTTP {
 	public static int CONNECTION_TYPE = CONNECTION_TYPE_STANDARD;
 //#endif
 
+	/**
+	 * Reports byte-level download progress for a request - see setProgressListener().
+	 * Purely opt-in: a request that never calls setProgressListener() behaves exactly
+	 * as it always has, since every call site here is guarded by a null check.
+	 */
+	public interface ProgressListener {
+		/**
+		 * Called once, right before the underlying connection is opened. This is the
+		 * phase most likely to hang or fail outright on a broken connection (DNS
+		 * resolution, no route to the server, etc.) since nothing has been received
+		 * yet and there's no byte count to report.
+		 */
+		void onConnecting();
+
+		/**
+		 * Called repeatedly while the response body is being read. total is -1 if the
+		 * server didn't send a Content-Length header, so the caller only knows how
+		 * much has arrived so far, not how much is left.
+		 */
+		void onProgress(int bytesRead, int total);
+	}
+
 	protected String method;
 	protected String url;
 	protected byte[] data;
@@ -20,6 +42,7 @@ public abstract class HTTP {
 	protected int responseCode;
 	protected byte[] responseBytes;
 	protected InputStream is;
+	protected ProgressListener progressListener;
 	private boolean requestMade;
 
 	protected HTTP(String method, String url) {
@@ -70,6 +93,7 @@ public abstract class HTTP {
 
 	protected void checkMakeRequest() throws Exception {
 		if (!requestMade) {
+			if (progressListener != null) progressListener.onConnecting();
 			is = makeRequest();
 			requestMade = true;
 		}
@@ -111,7 +135,18 @@ public abstract class HTTP {
 	public HTTP setData(String data) {
 		return setData(Util.stringToBytes(data));
 	}
-	
+
+	/**
+	 * Report byte-level progress for this request via listener as it runs - see
+	 * ProgressListener. Only getResponseBytesWithProgress()/getResponseStringWithProgress()
+	 * actually call it during the body read; the plain getResponseBytes()/getResponseString()
+	 * are unaffected either way.
+	 */
+	public HTTP setProgressListener(ProgressListener listener) {
+		this.progressListener = listener;
+		return this;
+	}
+
 	/**
 	 * Get the resulting URL that was requested, which may have changed in the case of a redirect.
 	 */
@@ -167,6 +202,47 @@ public abstract class HTTP {
 	public String getResponseString() throws Exception {
 		String charset = Util.getCharsetFromContentType(getResponseHeader("Content-Type"));
 		return Util.bytesToString(getResponseBytes(), charset);
+	}
+
+	/**
+	 * Like getResponseBytes(), but reports progress via the ProgressListener set with
+	 * setProgressListener() as the body is read, instead of reading it in one shot.
+	 * Only meant for a stream-based request (StandardHTTP/BluetoothHTTP) - unlike
+	 * getResponseBytes(), it doesn't handle LocalHTTP's pre-filled responseBytes case,
+	 * since progress isn't meaningful for data that's already fully in memory.
+	 */
+	public byte[] getResponseBytesWithProgress() throws Exception {
+		checkMakeRequest();
+
+		int total = -1;
+		try {
+			String lenHeader = getResponseHeader("Content-Length");
+			if (lenHeader != null) total = Integer.parseInt(lenHeader);
+		}
+		catch (Exception e) {}
+
+		if (progressListener != null) progressListener.onProgress(0, total);
+
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		byte[] chunk = new byte[4096]; // fewer, larger reads (was 512)
+		int soFar = 0;
+		int read;
+		while ((read = is.read(chunk)) != -1) {
+			buffer.write(chunk, 0, read);
+			soFar += read;
+			if (progressListener != null) progressListener.onProgress(soFar, total);
+		}
+
+		close();
+		return buffer.toByteArray();
+	}
+
+	/**
+	 * Like getResponseString(), but reports progress - see getResponseBytesWithProgress().
+	 */
+	public String getResponseStringWithProgress() throws Exception {
+		String charset = Util.getCharsetFromContentType(getResponseHeader("Content-Type"));
+		return Util.bytesToString(getResponseBytesWithProgress(), charset);
 	}
 
 	/**

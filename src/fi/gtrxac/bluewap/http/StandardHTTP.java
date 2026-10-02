@@ -26,9 +26,20 @@ public class StandardHTTP extends HTTP {
 		super(method, url);
 	}
 
+	/**
+	 * Opens the underlying connection for url. A subclass can override this to route
+	 * through a different transport/TLS implementation instead of the platform's own
+	 * Connector.open() - see pubtran.NativeHttp, which uses this to keep
+	 * hold of the raw connection (for reading its TLS info). Behavior is unchanged for
+	 * every existing caller, since none of them override it.
+	 */
+	protected Object openConnection(String url) throws IOException {
+		return Connector.open(url);
+	}
+
 	private InputStream makeRequestFinal(String finalUrl) throws Exception {
 		queueItem = HTTPQueue.newQueueItem();
-		hc = (HttpConnection) Connector.open(finalUrl);
+		hc = (HttpConnection) openConnection(finalUrl);
 		queueItem.hc = hc;
 
 		try {

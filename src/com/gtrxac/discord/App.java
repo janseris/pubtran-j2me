@@ -62,11 +62,11 @@ public class App extends MIDlet implements Strings {
 
 	public static final long DISCORD_EPOCH = 1420070400000L;
 
-	// --- Temporary: see startApp() below. Set to false (or wire JPStartScreen's "Info"
-	// command / a debug menu item into App.login()) to get back to the normal flow. ---
-	public static final boolean USE_JSONPLACEHOLDER_START_SCREEN = true;
+	// This fork starts the "Jízdní řády" (pubtran) client - see pubtran.StartScreen. Set to
+	// false to get back to the original Discord login flow, which is still all here.
+	public static final boolean USE_PUBTRAN_START_SCREEN = true;
 
-	static MyDisplay disp;
+	public static MyDisplay disp;
 
 	static GatewayThread gateway;
 	static String uploadToken;
@@ -132,12 +132,10 @@ public class App extends MIDlet implements Strings {
             Settings.load();
 			IconCache.init();
 
-			// --- Temporary: new start screen (JSONPlaceholder API test UI) ---
-			// This replaces the normal Discord login flow below while that new UI is
-			// being built out. The original flow (still fully working) is in the
-			// "else" branch - see JPStartScreen for what's new.
-			if (USE_JSONPLACEHOLDER_START_SCREEN) {
-				disp.setCurrent(new JPStartScreen());
+			// Pubtran (Jízdní řády) client - see pubtran.StartScreen. The original Discord
+			// flow is in the "else" branch.
+			if (USE_PUBTRAN_START_SCREEN) {
+				disp.setCurrent(new pubtran.StartScreen());
 			} else {
 //#ifndef NO_BLUETOOTH
 				if (Util.supportsBluetooth) {

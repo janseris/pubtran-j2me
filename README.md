@@ -1,70 +1,147 @@
-# Discord for J2ME
-Discord client for Java ME (MIDP 1.0 and 2.0) devices, inspired by [Discord for Symbian](https://web.archive.org/web/20240402175051/https://github.com/uwmpr/discord-symbian-fixed). Uses proxy servers for the [HTTP](/proxy/) and [gateway](https://github.com/gtrxAC/discord-j2me-server) connection.
+# Jízdní řády for Nokia 9300 (J2ME)
 
-Also see [Droidcord](https://github.com/leap0x7b/Droidcord), a Discord client for old Android devices, and [Discord WAP](https://github.com/gtrxAC/discord-wap), a client for old mobile browsers.
+This is a Java ME client for the Czech public transport timetable service used by the Android app **Jízdní řády** (`cz.fhejl.pubtran`). It targets the **Nokia 9300 / 9500 Communicator**: Series 80 v2, EKA1 kernel, MIDP 2.0 / CLDC 1.1, 640×200 screen.
 
-![Screenshots](img/screenshots.png)
+It is a copy of this project's **discord-j2me** fork, reusing its build toolchain, KEmulator setup, HTTP layer and the look of the JSONPlaceholder test screen. The JSONPlaceholder content has been replaced by the pubtran client.
 
-* [Download](https://github.com/gtrxAC/discord-j2me/releases/latest)
-* [Discord server](https://discord.gg/2GKuJjQagp) (#discord-j2me-wap channel)
-* [Telegram group](https://t.me/dscforsymbian)
+- **Backend:** `https://pubtran-backend.mapy.cz/api/v1/`. It speaks Seznam **FastRPC** (binary) and needs no login or API key. It was reverse-engineered from the Android app; see `..\PubtranClient\API.md`.
+- **TLS:** two transports.
+  - **Java TLS** (`JavaTls`, signed builds only): BouncyCastle TLS 1.2 over `socket://`. It sends SNI and skips the certificate chain check, like the native EKA1 patch. The connection is kept open (HTTP/1.1 keep-alive) and reused, so only the first request pays for the slow Java handshake; if the server closed the idle connection, the request is sent again over a new one. A later handshake resumes the previous TLS session when the server allows it.
+  - **Native TLS** (`NativeHttp`): `HttpConnection` (`https://`) through the TLS 1.2 patch for `SSLADAPTOR.dll`. On the 9300 it currently can't reach pubtran-backend.mapy.cz from Java (no SNI, the phone stalls; see [symbian-tls#13](https://github.com/shinovon/symbian-tls/issues/13)). Java TLS is compiled only into builds with the `JAVA_TLS` define (the signed and debug targets), which the 9300 can't use, so the phone build uses native TLS and doesn't bundle BouncyCastle (230 KB instead of 603 KB).
+- **Kept from the test screen:** the tile start page, the loading overlay with spinner and live transfer progress ("Připojování…", "4.2 KB / 12.0 KB (~1 s)"), and the request log with timing, sizes and TLS details.
 
-## Status
-### Working
-* Server, channel and thread lists
-* Direct messages and group DMs
-* Message reading, sending, editing, <abbr title="Only your own messages">deleting</abbr>
-* Replying to messages
-* Reading older messages
-* Attachment viewing
-* Attachment sending (<abbr title="Requires FileConnection API or HTML browser with file uploading support">device dependent</abbr>)
-* Gateway/live message updates (<abbr title="Not supported on MIDP 1.0">device dependent</abbr>)
-* <abbr title="Not in sync with official clients">Unread message indicators</abbr>
-* Emojis
+## Screens
 
-### Not implemented
-* Jumping to messages (e.g. replies)
-* Initiating DM conversations
-* Ping indicators
-* Reactions
-
-## How to build
-This fork bundles the whole build toolchain (JDK 8, ProGuard, and the J2ME stub API jars) directly in the repository, so cloning it is enough to build it - nothing else to download.
-
-1. Install [Node.js](https://nodejs.org) (used to run the build scripts).
-2. *(Optional, for editing the code)* Any Java-aware editor works here - the build never goes through an IDE, it's just `build.sh`/`build.bat` calling `javac` directly, so nothing depends on your editor choice. This repo's `.vscode/` config is set up for [VS Code](https://code.visualstudio.com/) (install the **Extension Pack for Java** extension) since that's what's easiest to preconfigure, but Eclipse, IntelliJ IDEA, or NetBeans work just as well - just add the jars in `sdk/lib` (plus `sdk/proguard.jar`) as external/referenced libraries in whichever one you use, for completion against the J2ME APIs.
-3. Run `build.sh` (Linux) or `build.bat` (Windows). The first run installs a couple of small npm packages, converts the translation files, then compiles every target listed in `build.json` into `bin/` (a `.jar` + `.jad` per target).
-
-### Testing builds
-[KEmulator nnmod](https://nnproject.cc/kem/) is a Java ME emulator, useful for quick testing without a real device. It's bundled in this repo too, at `tools/kemnnx64` (same reasoning as the build toolchain - it's a niche community tool, and niche download links have a habit of going dead).
-- Double-click `run_kemulator.bat` at the repo root for the quickest option - it launches `bin\discord_s60v2.jar` in KEmulator. Edit the jar name inside it once you have your own target built.
-- Or use the VS Code tasks (`Terminal > Run Task > Run Discord J2ME for ...`) - these already point at the bundled `tools/kemnnx64` via `${workspaceFolder}`, nothing to configure.
-- Or run it directly yourself, e.g. `tools\kemnnx64\KEmulator_Console.bat bin\discord_s60v2.jar`.
-- Or launch/debug it from another IDE instead - KEmulator supports the old UEI (Unified Emulator Interface) standard, so it can be wired up as a run target from Eclipse (with the MTJ plugin) or NetBeans, and it also ships some bundled IntelliJ IDEA integration. None of this is VS Code-specific.
-
-The bundled copy already has a `640x200 (Nokia 9300/9500 - Series 80)` device preset added (see `tools/kemnnx64/presets_custom.xml`), set as the default - useful context if you're also targeting Series 80 devices.
-
-### What's bundled and why
-This repo carries a lot of third-party `.jar` files directly in git (see [`.gitignore`](.gitignore) for the exceptions to the normal `*.jar` exclude) so that cloning it is enough to build and test, without having to track down niche download links. Here's what each group actually is:
-
-| Location | What it is | Used for |
+| Screen | What it does | App call |
 |---|---|---|
-| `lib/bouncycastle.jar` | [Bouncy Castle](https://www.bouncycastle.org/), a Java crypto library (upstream dependency, not added by this fork) | TLS 1.2 in pure Java, via `tech.alicesworld.ModernConnector`. **Not used by this fork's build targets** - the `discord_*_tls` targets that need it are disabled in `build.json`, since this fork relies on the native `SSLADAPTOR.dll` TLS patch on-device instead. Kept in case those targets are ever re-enabled. |
-| `sdk/proguard.jar` | [ProGuard](https://github.com/Guardsquare/proguard) | Shrinks and obfuscates each target's compiled `.jar` (invoked from `sdk/compile.ps1`/`compile.sh`). |
-| `sdk/lib/*.jar` (`midpapi20`, `cldcapi10`, `cldcapi11`, `jsr75`, `jsr82`, `javapiglerapi`, `nokiaui`) | J2ME API **stub** jars | Compile-time-only stand-ins for the MIDP/CLDC/JSR APIs, passed to `javac` as the bootclasspath. They only contain empty method signatures, not real implementations - the real ones are supplied by the phone's own JVM at runtime, so none of this ends up in the built `.jar`. |
-| `sdk/jdk8u504-b01/**/*.jar` (`rt.jar`, `jce.jar`, `jsse.jar`, etc.) | The bundled JDK 8's own internal runtime jars | Not ours - just what the Temurin JDK 8 distribution ships with, needed to run `javac`/`java` themselves. Untouched; don't edit these. |
-| `tools/kemnnx64/KEmulator.jar`, `builder.jar`, `sensorsimulator.jar` | [KEmulator nnmod](https://github.com/shinovon/KEmulator)'s own code | The emulator itself, plus its build helper and optional sensor-simulation plugin. |
-| `tools/kemnnx64/lwjgl*.jar`, `lwjgl3-swt*.jar`, `swt-*.jar` | [LWJGL](https://www.lwjgl.org/) and [SWT](https://www.eclipse.org/swt/) native bindings, one set per OS/architecture (Windows, Linux, macOS, Android; x86/ARM) | KEmulator's rendering (LWJGL/OpenGL) and window toolkit (SWT) dependencies. Only the Windows x64 ones are actually used here - the rest ship because KEmulator's download is cross-platform, and nothing here strips the other platforms out. |
-| `tools/kemnnx64/uei/*.jar` | J2ME/JSR API stub jars for the old UEI (Unified Emulator Interface) standard | Only relevant if you wire KEmulator into an IDE (Eclipse with the MTJ plugin, NetBeans) as a UEI run/debug target - unrelated to the normal `build.bat` / `run_kemulator.bat` flow described above. |
+| **Start** (tiles: Odkud · Kam · Přes · Kdy · Hledat · Log · HTTPS test) | The search form. *Hledat* runs the search with the loading overlay drawn over the tiles. | `getroutesopt` |
+| **Odkud / Kam / Přes** | A hand-drawn list: one click or Enter on a place picks it. Type on the keyboard and press Enter to search (nothing is sent while typing: on the 9300 every request is a full TLS handshake, since the EKA1 TLS patch has no session resumption). Clicking the field opens the phone's text editor. With an empty field it shows recently used places, stored in RMS on the phone. | `suggest` |
+| **Kdy** | Date and time (or "now"), departure/arrival, direct connections only, low-floor, and transport modes. | – |
+| **Výsledky** | The connection list. *<< Dřívější spoje* and *Další spoje >>* are the first and last rows (they replace the app's scroll up/down). Delays come with each page; *Obnovit zpoždění* fetches fresh ones (nothing is requested automatically). | `getroutesopt` index −5/+5 + `hashes_used`, `gettripinfos` |
+| **Detail spojení** | Every leg with times, platforms, delays, warnings and ticket prices. *Všechny zastávky* toggles the intermediate stops. *Spoj N: …* opens a ride. | `gettripinfos` |
+| **Detail spoje** | The whole trip of one ride; the part you travel is highlighted. *< Předchozí spoj* and *Následující spoj >* replace the app's swipe. | `getnextdepartures` reqindex ±1, ±2… + `gettripinfos` |
+| **Log** | Each row shows the method, total time, size and the TLS handshake time (or "spoj. znovu" for a reused connection). Selecting a row shows the full URL, transport, request and response headers, HTTP status, timing (TCP connect, TLS handshake full/resumed, until the response status, download), and the TLS protocol, cipher suite and certificate. | – |
+| **HTTPS test** | GET to a chosen server over **native** or **Java** TLS. Shows HTTP status, time, size, protocol, cipher and certificate issuer. Java TLS also shows TCP and handshake time separately and sends a second GET over the same connection. *Otestovat lehké stránky* runs a list of small text pages. | `https://` / `socket://` |
 
-Day to day, only `sdk/lib/*.jar` and `sdk/proguard.jar` are things you'd ever actually touch - everything else is JDK or KEmulator internals, kept around purely so the repo stays clone-and-run.
+The Nokia 9300 has no touch screen. Move around with the navi key and use the commands on the Communicator's right-hand buttons or in the menu.
 
-### Updating the bundled toolchain
-If you ever need to bump a version, here's where the bundled files originally came from: [Temurin OpenJDK 8](https://adoptium.net/temurin/releases/?version=8&package=jdk) (extract into `sdk/`, keep the `sdk/jdk8u...` folder name pattern), [ProGuard](https://github.com/Guardsquare/proguard/releases/latest) (`lib/proguard.jar` from the release archive, into `sdk/proguard.jar`), the stub API jars - [midpapi20](https://github.com/vipaoL/j2me-build-tools/raw/c1598b6916f2ba2ad5be1c0accd1ed2a54c156f3/WTK2.5.2/lib/midpapi20.jar), [cldcapi10](https://github.com/vipaoL/j2me-build-tools/raw/c1598b6916f2ba2ad5be1c0accd1ed2a54c156f3/WTK2.5.2/lib/cldcapi10.jar), [cldcapi11](https://github.com/vipaoL/j2me-build-tools/raw/c1598b6916f2ba2ad5be1c0accd1ed2a54c156f3/WTK2.5.2/lib/cldcapi11.jar), [jsr75](https://github.com/vipaoL/j2me-build-tools/raw/c1598b6916f2ba2ad5be1c0accd1ed2a54c156f3/WTK2.5.2/lib/jsr75.jar), [jsr82](https://github.com/vipaoL/j2me-build-tools/raw/e48bfaa97600f4aea8e5e1fff8af769755e2d1e9/lib/jsr82.jar), [javapiglerapi](https://nnp.nnchan.ru/pna/lib/javapiglerapi.jar), and [nokiaui](https://github.com/vipaoL/j2me-build-tools/raw/refs/heads/master/lib/nokiaui.jar) - into `sdk/lib`, and [KEmulator nnmod](https://github.com/shinovon/KEmulator/releases) (the `kemnnx64` Windows x64 build) - extract into `tools/kemnnx64`. The two `.bat` launchers in that folder auto-detect the bundled JDK (same `dir /b sdk\jdk*` trick `build.bat` uses) instead of relying on a system-wide Java install, so they don't need editing when the JDK version changes - only `.vscode/settings.json`'s `java.jdt.ls.java.home` has the JDK folder name hardcoded and needs a manual bump.
+## Code
 
-## Thanks
-* [@uwmpr](https://github.com/uwmpr) for formerly hosting the default proxy server
-* [@WunderWungiel](https://github.com/WunderWungiel) for formerly hosting the CDN proxy
-* [@shinovon](https://github.com/shinovon) for their Java ME [JSON library](https://github.com/shinovon/NNJSON)
-* [@AeroPurple](https://github.com/AeroPurple) for composing the default notification sound
-* Language translation contributors (see About screen in the app)
+All new code is in its own package, **`src/pubtran/`**, separate from the Discord code in `src/com/gtrxac/discord/`:
+
+| Files | Purpose |
+|---|---|
+| `Frpc`, `FrpcStruct`, `FrpcDate` | FastRPC 2.1 encoder/decoder (hand-written UTF-8, no `Calendar` time zone maths). |
+| `PubtranApi` | The endpoints. Each has a request builder (`*Params`) and a response parser (`parse*`), plus `call()`, which handles progress and logging. |
+| `JavaTls`, `JavaTlsClient`, `SniServerName` | Java TLS: BouncyCastle client (SNI, ECDHE/RSA suites, no chain check, session resumption), HTTP/1.1 keep-alive over one shared connection, retry over a new connection when the idle one was closed. |
+| `NativeHttp` | `StandardHTTP` over `HttpConnection` (native TLS); records the status, headers and `SecurityInfo` for the log. |
+| `TlsTestScreen` | The HTTPS test (native or Java TLS). |
+| `src/org/bouncycastle/...` | Replace BouncyCastle's `CustomNamedCurves` / `ECNamedCurveTable` with just P-256 and P-384. The originals keep ~140 unused curve classes in the JAR (836 KB → 603 KB). |
+| `Place`, `Route`, `RoutePart`, `TripStop`, `Info`, `SearchState`, `RecentPlaces`, `Fmt` | Data model, search state, recent places (RMS) and Czech formatting. |
+| `StartScreen`, `PlaceScreen`, `WhenScreen`, `ResultsScreen`, `RouteScreen`, `TripScreen` | The UI. |
+| `TileScreen`, `Spinner`, `LoadingScreen`, `LoadingHost`, `RequestThread`, `RequestCallback`, `RequestLog`, `LogEntry`, `LogScreen`, `LogDetailScreen`, `TlsInfo` | Carried over from the JSONPlaceholder test screen. |
+
+The only changes to the Discord code are these:
+
+- `App` starts `pubtran.StartScreen` and makes `App.disp` public. Set `App.USE_PUBTRAN_START_SCREEN = false` to get the Discord client back.
+- The ModernConnector code is removed; BouncyCastle (`lib/bouncycastle.jar`, from discord-j2me) is bundled again for `pubtran.JavaTls`.
+
+The Discord client stays in the JAR. That adds to its size, but keeps this a straight fork, so fixes can still be merged from discord-j2me.
+
+### Verification
+
+The FastRPC codec and request builders were checked on a PC against the traffic captured from the Android app (`..\pubtran.flow`):
+
+- All 34 recorded requests re-encode **byte-for-byte**.
+- `suggestParams`, `searchParams` (first page, index 5, index 10 + hashes), `otherRunParams` (reqindex 2) and `tripInfosParams` produce exactly the bytes the app sent.
+- Every recorded response parses.
+
+The UI itself has not been run on the phone yet.
+
+## TLS measurements on the Nokia 9300
+
+Measured with the TLS test:
+
+- **jsonplaceholder.typicode.com:** HTTPS 7.3 s vs HTTP 1.4 s, so the TLS handshake costs **~5.9 s** (the EKA1 TLS patch does a full handshake on every connection).
+- **www.google.com, www.seznam.cz:** fail after ~3 s with *Unexpected end of stream*.
+- **pubtran-backend.mapy.cz:** stalls the phone until the USB internet link drops (Symbian error **-29**). Java TLS would avoid this, but can't run on the 9300 (see Building).
+- The causes (no SNI from Java, device-only failures) are reported in [symbian-tls#13](https://github.com/shinovon/symbian-tls/issues/13).
+
+## Java TLS / signing tests on the Nokia 9300
+
+Java TLS needs `socket://`. Results so far (October 2026, TLS patch v19, phone date correct, online certificate check off):
+
+| # | Build | Signed with | Install method | Result |
+|---|---|---|---|---|
+| 1 | Java TLS, unsigned (`.jar`) | – | `.jar` | Installs; `socket://` → **SecurityException** after 47 ms |
+| 2 | Java TLS, `.jad` with wrapped lines | Darkman | `.jad` (sideloaded) | "Podpis není" – the JAD parser doesn't support continuation lines (fixed: one line per attribute) |
+| 3 | Java TLS, socket permission required | Darkman | `.jad` | Online cert check hung 2 min (URL `ion.server.url` is a placeholder), then **"odmítnuta serverem jazyka Java"** |
+| 4 | same, online cert check off | Darkman | `.jad` | **refused** ("odmítnuta serverem jazyka Java") |
+| 5 | socket permission optional | Darkman | `.jad` | **refused** |
+| 6 | no permissions at all | Darkman | `.jad` | **refused** |
+| 7 | unsigned, via JAD | – | `.jad` | "Untrusted, continue?" → **installs** (JAD route works) |
+| 8 | own self-signed certificate (`pubtran-sign.cer` imported, trusted for Java/app install) | own | `.jad`, app removed first | **refused** |
+| 9 | root + signer chain (`pubtran-root.cer` imported) | chain | `.jad` | **"Ověření certifikátu se nezdařilo – Digitální podpis nelze ověřit"** (root found, signature check fails) |
+| 10 | 2 KB SignTest MIDlet, CRLF JAD | chain | `.jad` | **refused** (not a JAR size problem) |
+| 11 | 2 KB SignTest MIDlet, LF JAD | chain | `.jad` | **refused** (not a line-ending problem) |
+| 12 | SignTest over the air (`ota/`), CRLF JAD | chain | phone browser (Save and open) | **refused**; the phone downloaded only the JAD, never the JAR |
+| 13 | SignTest over the air (`ota/`) | Darkman | phone browser | **refused**; again only the JAD (1.2 kB) was downloaded |
+
+All signatures verify on the PC (`openssl dgst -sha1 -verify`). Over the air, the phone refuses the suite from the JAD alone, before downloading the JAR, so the JAR (size, transfer, signature bytes) is not the cause: the phone does not accept a signer certificate that chains to a user-imported root. **Conclusion: Java TLS (`socket://`) is not possible on the Nokia 9300.** This matches gtrxac.fi/j2me/proxyless (S80: system TLS patch only, no certificate method). The only way to reach pubtran-backend.mapy.cz is the native TLS patch once [symbian-tls#13](https://github.com/shinovon/symbian-tls/issues/13) is fixed.
+
+### Over-the-air install test
+
+`ota/` has signed SignTest MIDlets and `ota_server.js`, a small HTTP server with the MIDP MIME types that rewrites `MIDlet-Jar-URL` to an absolute URL. Run `node ota_server.js` in that folder, then open `http://<PC address>:8000/` in the phone's browser and pick a `.jad`. SignTest's *Socket test* shows whether `socket://` is allowed.
+
+## Building
+
+This works exactly like the discord-j2me fork. Everything is bundled (JDK 8, ProGuard, stub API jars, KEmulator).
+
+1. Install [Node.js](https://nodejs.org).
+2. Run `build.bat` (Windows) or `build.sh` (Linux).
+
+Output: `bin/pubtran_s80.jar` (unsigned, native TLS). Install the `.jar` as before.
+
+**The jar is unsigned, and it has to be.** See [Why the jar can't be signed](#why-the-jar-cant-be-signed-nokia-9300) below.
+
+Install the `.jar` directly, not the `.jad`. Over the air, the 9300 rejects our `.jad` before it downloads the jar. The server in `ota/` (`start_ota_server.bat`, port 8000) serves the jar and the TLS DLLs, and has an `/upload` page for sending logs from the phone to the PC.
+
+- `build.json` has these targets:
+  - `pubtran_s80`: the release build (unsigned, native TLS), ProGuard-obfuscated.
+  - `pubtran_s80_signed`: signed with the Darkman certificate, uses Java TLS. Disabled.
+  - `pubtran_debug`: unobfuscated, disabled by default. Set `"disabled": false` to build it.
+- The targets list `lib/bouncycastle.jar` in their bootclasspath: the build extracts it into `lib/bouncycastle/` once and bundles it (ProGuard keeps only what's used). The app's classes are added after it, so `src/org/bouncycastle/...` replaces the original classes.
+- The targets compile against `cldcapi11.jar`, because the Nokia 9300 is CLDC 1.1 and FastRPC coordinates are doubles. The manifest declares CLDC-1.1.
+- `build.sh` / `compile.sh` compile with `-encoding UTF-8`, because the sources contain Czech text.
+
+## Why the jar can't be signed (Nokia 9300)
+
+The Nokia 9300 / 9500 runs **Series 80 v2 on Symbian 7.0s (EKA1)**, not S60.
+
+**What we tried.** Unsigned MIDlets get a `SecurityException` for `socket://`, so we tried signing. The 9300 refused every signed suite, even a 2 KB test MIDlet ("Instalace aplikace byla odmítnuta serverem jazyka Java" / "Digitální podpis nelze ověřit"). We tried three signers, each imported on the phone and allowed for application installation:
+
+- the "Darkman" certificate from discord-j2me,
+- an own self-signed certificate,
+- an own root + signer chain.
+
+**Why it can't work.** On Nokia phones of this generation, only root certificates built in by Nokia, the operators and the big CAs can verify a MIDlet signature. An imported certificate can be marked as trusted, but it never maps to a MIDP protection domain, so a signature chaining to it can't be verified.
+
+- Forum Nokia's [MIDP 2.0: Tutorial On Signed MIDlets](https://wosign.com/Support/resources/MIDP_2_0_Tutorial_On_Signed_MIDlets_v1_1_en.pdf) says a self-signed certificate works only in the emulator: "the set of root certificates is closed".
+- [gtrxac.fi/j2me/proxyless](https://gtrxac.fi/j2me/proxyless) supports Series 80 2nd Edition (Symbian 7.0) only through the system-level TLS 1.2 patch ("certificate is not required"), not through Java TLS with a certificate.
+- The workarounds for newer phones need Symbian 9.x (S60v3 and later): discord-j2me's Darkman certificate and nnproject's [Java Permissions patch](http://nnproject.cc/jrtsecuritypatch) (Symbian 9.3+ with Open4All).
+- The nnproject [TLS 1.2 patch](http://nnproject.cc/tls) has an EKA1 build (BearSSL) for S60v2, **S80v2**, S90 and UIQ2, for native and J2ME apps. That's what this app uses, through the fork [janseris/symbian-tls](https://github.com/janseris/symbian-tls) (branch `eka1-java-fixes`).
+
+**Consequences for the app.** The app runs in the *untrusted* domain:
+
+- **No sockets.** No `socket://` or `ssl://`, so no TLS or raw TCP of our own. The BouncyCastle Java TLS (`JavaTls`) can't run on the phone. It stays behind `//#ifdef JAVA_TLS`, in the disabled targets `pubtran_s80_signed` and `pubtran_debug`, for emulators and other phones.
+- **All HTTPS goes through `HttpConnection` (`https://`), handled by the phone's `SSLADAPTOR.dll`.** The app can't choose the TLS version, cipher suites or SNI, and can't check the certificate itself. SNI and these settings come from the patched DLL; for Java the DLL reads the host name from the request's `Host:` header.
+- **No connection reuse from Java.** The app can't keep a TLS connection open between requests: the DLL is loaded per connection and every request is a new TCP connection with a new handshake. The only speed-up is TLS session resumption inside the DLL (saved in `C:\System\Data\ssl_sessions.dat`). So the app should make few, small requests, for example no search-as-you-type.
+- **No gzip.** The 9300's Java can't inflate, so the app doesn't send `Accept-Encoding: gzip` and responses come uncompressed.
+- **Permission prompts.** The phone may ask the user to allow network access, and the user can't grant the app a "trusted" level.
+- **No signing keys.** None are needed; build only the unsigned `pubtran_s80` target.
+
+## Testing in KEmulator
+
+- Double-click `run_kemulator.bat`, or in VS Code use *Run Jizdni rady (Nokia 9300 / S80)*.
+- The bundled KEmulator defaults to the `640x200 (Nokia 9300/9500 - Series 80)` preset.
+- In the emulator, "native TLS" means the PC's Java HTTPS.

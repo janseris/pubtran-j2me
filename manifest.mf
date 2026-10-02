@@ -1,31 +1,31 @@
 //#ifdef NOKIA_128PX
 //#ifdef DEBUG
-MIDlet-1: Discord, /icon_28.png, com.gtrxac.discord.App
+MIDlet-1: Jizdni rady, /icon_28.png, com.gtrxac.discord.App
 //#else
-MIDlet-1: Discord, /icon_28.png, a
+MIDlet-1: Jizdni rady, /icon_28.png, a
 //#endif
 MIDlet-Icon: /icon_28.png
 //#else
 //#ifdef S60V2
 //#ifdef DEBUG
-MIDlet-1: Discord, /icon_42_29.png, com.gtrxac.discord.App
+MIDlet-1: Jizdni rady, /icon_42_29.png, com.gtrxac.discord.App
 //#else
-MIDlet-1: Discord, /icon_42_29.png, a
+MIDlet-1: Jizdni rady, /icon_42_29.png, a
 //#endif
 MIDlet-Icon: /icon_42_29.png
 //#else
 //#ifdef DEBUG
-MIDlet-1: Discord, /icon.png, com.gtrxac.discord.App
+MIDlet-1: Jizdni rady, /icon.png, com.gtrxac.discord.App
 //#else
-MIDlet-1: Discord, /icon.png, a
+MIDlet-1: Jizdni rady, /icon.png, a
 //#endif
 MIDlet-Icon: /icon.png
 //#endif
 //#endif
-MIDlet-Name: Discord
-MIDlet-Vendor: gtrxAC
-MIDlet-Version: 5.4.0
-MicroEdition-Configuration: CLDC-1.0
+MIDlet-Name: Jizdni rady
+MIDlet-Vendor: pubtran-j2me
+MIDlet-Version: 1.0.0
+MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 //#ifdef NOKIA_S60_MANIFEST
 Nokia-Scalable-Icon: /icon.svg
@@ -54,7 +54,8 @@ LGE-MIDlet-TargetLCD-Width: 480
 MIDletX-Big-Icon: /icon_32.png
 MIDletX-Medium-Icon: /icon_38_18.png
 //#endif
-//#ifdef MODERNCONNECTOR
-MIDlet-Permissions: javax.microedition.io.Connector.socket
-MIDlet-Permissions-Opt: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read
+//#ifdef SIGNED
+//#ifndef NO_PERMISSIONS
+MIDlet-Permissions-Opt: javax.microedition.io.Connector.socket, javax.microedition.io.Connector.http, javax.microedition.io.Connector.https
+//#endif
 //#endif

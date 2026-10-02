@@ -17,9 +17,9 @@ const compileTarget = (target) => {
     process.env.JAR_NAME = target.name;
     process.env.DEFINES = "-D" + target.defines.join(" -D");
     process.env.BOOTCLASSPATH = target.bootclasspath.join(classpathJoiner);
+    process.env.MODCON = Number(target.bootclasspath.some(jar => jar.includes('bouncycastle')));
     process.env.EXCLUDES = (target.excludes || []).join(" ");
 
-    process.env.MODCON = Number(target.bootclasspath.some(jar => jar.includes('bouncycastle')));
 
     console.log(`${"_".repeat(80)}\n`)
     console.log(` Compiling: ${target.name}`)
@@ -38,8 +38,8 @@ const compileTarget = (target) => {
         jadmaker2.createJadFromJar(
           `bin/${target.name}.jar`,
           `bin/${target.name}.jad`,
-          `http://gtrxac.fi/${target.name}.jar`,
-          "http://gtrxac.fi",
+          `${target.name}.jar`,
+          "https://mapy.cz",
           target.sign
         );
         resolve();

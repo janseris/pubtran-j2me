@@ -2,7 +2,20 @@ const fs = require('fs');
 const crypto = require("crypto");
 const AdmZip = require("adm-zip");
 
-const privateKey = fs.readFileSync("./sdk/exp.pem", "utf8");
+// sign: true = the "Darkman" key/certificate from discord-j2me (sdk/exp.pem, exp.cer);
+// sign: "own" = this project's own key/certificate (sdk/sign/own.pem, own_cert.pem,
+// pubtran-sign.cer to install on the phone).
+function signingKeyAndCert(sign) {
+    if (sign === "own" || sign === "chain") {
+        // "own": one self-signed certificate (pubtran-sign.cer on the phone);
+        // "chain": signer certificate issued by a separate root (pubtran-root.cer on the phone)
+        const base = sign === "own" ? "own" : "leaf";
+        const pem = fs.readFileSync("./sdk/sign/" + base + "_cert.pem", "utf8");
+        const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+        return { key: fs.readFileSync("./sdk/sign/" + base + ".pem", "utf8"), cert: b64 };
+    }
+    return { key: fs.readFileSync("./sdk/exp.pem", "utf8"), cert: null };
+}
 
 function createJadFromJar(path, outPath, jarUrl, infoUrl, sign) {
     const zip = new AdmZip(path);
@@ -22,8 +35,9 @@ function createJadFromJar(path, outPath, jarUrl, infoUrl, sign) {
         signer.update(jar);
         signer.end();
 
+        const signing = signingKeyAndCert(sign);
         const signature = signer
-            .sign(privateKey)
+            .sign(signing.key)
             .toString("base64")
             .match(/.{1,64}/g)
             .join("");
@@ -31,7 +45,8 @@ function createJadFromJar(path, outPath, jarUrl, infoUrl, sign) {
         mf.set("MIDlet-Jar-RSA-SHA1", signature);
 
         // hardcoded base64 of darkman cert
-        mf.set("MIDlet-Certificate-1-1","MIIB7jCCAVcCBEWxvN0wDQYJKoZIhvcNAQEEBQAwPTELMAkGA1UEBhMCUlUxDTALBgNVBAoTBG5vbmUxDTALBgNVBAsTBG5vbmUxEDAOBgNVBAMTB0RhcmttYW4wIBcNMDcwMTIwMDY1NTI1WhgPMjA3NTA3MDIwNjU1MjVaMD0xCzAJBgNVBAYTAlJVMQ0wCwYDVQQKEwRub25lMQ0wCwYDVQQLEwRub25lMRAwDgYDVQQDEwdEYXJrbWFuMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYLFUb8RYT89sbTAEE14ApYFI8PVpnxXGgLuE8V6+XGQu4q5MtYwmip8EMm/STLXb73gQmDnQUpwBKzTScXLQDA4n9lLni4yl29/+X5Y0rIA6tlPmK3p9wpt0t9j/rWEYF4zFsiMTNobGHZOK/MAxOM+wPICRW8DFLQ/rYcNjcpQIDAQABMA0GCSqGSIb3DQEBBAUAA4GBAG1fDNKSjvcvvi20AREsMT80iJdO/YXqcVrUsYrQVaZL3scsA+EVKi7Dv76c8oqjxxiueOnn+fTTmlkAOO5ngzZhk13m3tcNxwUs0A/1GBMbVDbYlEc6vEYQde9x+07iyrxmtwj6qVR1r3zTEy2wS52poVmCkcrPXY0wylKesjFP");
+        if (signing.cert) mf.set("MIDlet-Certificate-1-1", signing.cert);
+        else mf.set("MIDlet-Certificate-1-1","MIIB7jCCAVcCBEWxvN0wDQYJKoZIhvcNAQEEBQAwPTELMAkGA1UEBhMCUlUxDTALBgNVBAoTBG5vbmUxDTALBgNVBAsTBG5vbmUxEDAOBgNVBAMTB0RhcmttYW4wIBcNMDcwMTIwMDY1NTI1WhgPMjA3NTA3MDIwNjU1MjVaMD0xCzAJBgNVBAYTAlJVMQ0wCwYDVQQKEwRub25lMQ0wCwYDVQQLEwRub25lMRAwDgYDVQQDEwdEYXJrbWFuMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYLFUb8RYT89sbTAEE14ApYFI8PVpnxXGgLuE8V6+XGQu4q5MtYwmip8EMm/STLXb73gQmDnQUpwBKzTScXLQDA4n9lLni4yl29/+X5Y0rIA6tlPmK3p9wpt0t9j/rWEYF4zFsiMTNobGHZOK/MAxOM+wPICRW8DFLQ/rYcNjcpQIDAQABMA0GCSqGSIb3DQEBBAUAA4GBAG1fDNKSjvcvvi20AREsMT80iJdO/YXqcVrUsYrQVaZL3scsA+EVKi7Dv76c8oqjxxiueOnn+fTTmlkAOO5ngzZhk13m3tcNxwUs0A/1GBMbVDbYlEc6vEYQde9x+07iyrxmtwj6qVR1r3zTEy2wS52poVmCkcrPXY0wylKesjFP");
     }
 
     fs.writeFileSync(outPath, createJad(mf));
@@ -54,17 +69,12 @@ function parseJad(jad) {
 function createJad(map) {
     let result = "";
 
+    // One attribute per line, CRLF. The MIDP JAD format has no continuation lines (that's
+    // a JAR-manifest feature): the Nokia 9300 installer drops wrapped attributes and then
+    // reports "no signature present" for a signed JAD.
     map.forEach((value, key) => {
-        value = value.toString();
-
-        let availableCols = 68 - key.length;  // first line: 70 chars minus those used by the key and the ": " after it
-        result += key + ":";
-
-        while (value.length) {
-            result += " " + value.slice(0, availableCols) + "\n";
-            value = value.slice(availableCols);
-            availableCols = 69;  // subsequent lines: 70 chars minus one leading space
-        }
+        if (key === "Manifest-Version" || key === "Created-By") return;
+        result += key + ": " + value.toString() + "\r\n";
     })
 
     return result;

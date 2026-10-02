@@ -49,17 +49,26 @@ $javaFilesToCompile = Get-ChildItem -Recurse -Path build\src -Filter *.java | Fo
 # Note: use -nowarn to suppress all warnings, because deprecation warning is somehow treated as an error
 
 $jar = Join-Path $env:JAVA_HOME "bin\jar.exe" -resolve
-if (-Not (Test-Path "lib\ModernConnector")) {
+# BouncyCastle (pure-Java TLS for hosts the native TLS can't reach - see pubtran.JavaTls):
+# extracted once and bundled into targets whose bootclasspath lists lib/bouncycastle.jar.
+if ($env:MODCON -eq 1 -and -Not (Test-Path "lib\bouncycastle\org")) {
     Write-Host "Extracting libraries"
-    New-Item -ItemType Directory -Path "lib\ModernConnector" -Force | Out-Null
-    Set-Location "lib\ModernConnector"
-    & $jar xf ../ModernConnector.jar
+    New-Item -ItemType Directory -Path "lib\bouncycastle" -Force | Out-Null
+    Set-Location "lib\bouncycastle"
+    & $jar xf ../bouncycastle.jar
     Set-Location "..\.."
+    if (-Not (Test-Path "lib\bouncycastle\org")) {
+        throw "Failed to extract lib\bouncycastle.jar"
+    }
 }
 
-& $jar cvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
+# BouncyCastle first, then the app's classes: src/org/bouncycastle/... replaces a few
+# BouncyCastle classes (smaller curve tables), and the later update overwrites them.
 if ($env:MODCON -eq 1) {
-    & $jar uvf bin/in.jar -C lib/ModernConnector . >> sdk/log.txt
+    & $jar cvf bin/in.jar -C lib/bouncycastle . >> sdk/log.txt
+    & $jar uvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
+} else {
+    & $jar cvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
 }
 & $jar uvfm bin/in.jar build/manifest.mf >> sdk/log.txt
 

@@ -32,5 +32,9 @@
 -dontnote
 -dontusemixedcaseclassnames
 -repackageclasses ''
--overloadaggressively
+#-overloadaggressively  (the Nokia 9300 rejects some same-name methods as an invalid archive)
 -allowaccessmodification
+# pubtran-j2me: src/org/bouncycastle/crypto/ec/CustomNamedCurves.java replaces BouncyCastle's
+# class; the original's 32 per-curve holder classes are still in the input JAR but nothing
+# uses them any more (ProGuard removes them).
+-dontwarn org.bouncycastle.crypto.ec.CustomNamedCurves$*

@@ -18,3 +18,8 @@ lib/*/
 
 # JDK's own source archive - not needed to build/run, just saves ~52MB
 sdk/jdk*/src.zip
+
+# pubtran-j2me
+_to_delete/
+ota/uploads/
+ota/*.dll

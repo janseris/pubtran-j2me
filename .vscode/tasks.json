@@ -2,7 +2,6 @@
     "version": "2.0.0",
     "tasks": [
         {
-            // TODO: Add possibility to compile a jar for a single specific variant
             "label": "Compile all JARs",
             "command": "/bin/bash ./build.sh",
             "windows": {
@@ -23,118 +22,13 @@
             }
         },
         {
-            "label": "Run Discord J2ME for MIDP2",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_midp2.jar",
+            "label": "Run Jizdni rady (Nokia 9300 / S80) in KEmulator",
             "type": "shell",
-            // "dependsOn": [
-            //     "Compile all JARs"
-            // ],
+            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/pubtran_s80.jar",
             "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_midp2.jar",
+                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\pubtran_s80.jar"
             },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
-        {
-            "label": "Run Discord J2ME for MIDP2-alt",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_midp2_alt.jar",
-            "type": "shell",
-            "dependsOn": [
-                "Compile all JARs"
-            ],
-            "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_midp2_alt.jar",
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
-        {
-            "label": "Run Discord J2ME for BlackBerry",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_blackberry.jar",
-            "type": "shell",
-            "dependsOn": [
-                "Compile all JARs"
-            ],
-            "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_blackberry.jar",
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
-        {
-            "label": "Run Discord J2ME for J2ME Loader",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_jl.jar",
-            "type": "shell",
-            "dependsOn": [
-                "Compile all JARs"
-            ],
-            "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_jl.jar",
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
-        {
-            "label": "Run Discord J2ME for LG",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_lg.jar",
-            "type": "shell",
-            "dependsOn": [
-                "Compile all JARs"
-            ],
-            "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_lg.jar",
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
-        {
-            "label": "Run Discord J2ME for Samsung",
-            "command": "/bin/bash ${workspaceFolder}/tools/kemnnx64/KEmulator.sh ${workspaceFolder}/bin/discord_samsung.jar",
-            "type": "shell",
-            "dependsOn": [
-                "Compile all JARs"
-            ],
-            "windows": {
-                "command": "@echo | call ${workspaceFolder}\\tools\\kemnnx64\\KEmulator_Console.bat ${workspaceFolder}\\bin\\discord_samsung.jar",
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
-        },
+            "problemMatcher": []
+        }
     ]
 }

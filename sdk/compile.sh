@@ -24,21 +24,29 @@ cd ../..
 # If you want to change the APIs (bootclasspath), also edit the ProGuard config (midlets.pro)
 echo "Compiling"
 ${JAVA_HOME}/bin/javac `find build/src -name '*'.java` -d classes \
-    -source 1.2 -target 1.2 -Xlint:-options \
+    -source 1.2 -target 1.2 -encoding UTF-8 -Xlint:-options \
     -bootclasspath ${BOOTCLASSPATH} \
     > sdk/log.txt
 
-if [[ ! -e lib/bouncycastle ]]; then
+# BouncyCastle (pure-Java TLS for hosts the native TLS can't reach - see pubtran.JavaTls):
+# extracted once and bundled into targets whose bootclasspath lists lib/bouncycastle.jar.
+if [[ ${MODCON} == 1 && ! -e lib/bouncycastle/org ]]; then
     echo "Extracting libraries"
-    mkdir lib/bouncycastle
+    mkdir -p lib/bouncycastle
     cd lib/bouncycastle
     ${JAVA_HOME}/bin/jar xf ../bouncycastle.jar
     cd ../..
 fi
 
 echo "Creating JAR"
-${JAVA_HOME}/bin/jar cvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
-[[ ${MODCON} == 1 ]] && ${JAVA_HOME}/bin/jar uvf bin/in.jar -C lib/bouncycastle . >> sdk/log.txt
+# BouncyCastle first, then the app's classes: src/org/bouncycastle/... replaces a few
+# BouncyCastle classes (smaller curve tables), and the later update overwrites them.
+if [[ ${MODCON} == 1 ]]; then
+    ${JAVA_HOME}/bin/jar cvf bin/in.jar -C lib/bouncycastle . >> sdk/log.txt
+    ${JAVA_HOME}/bin/jar uvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
+else
+    ${JAVA_HOME}/bin/jar cvf bin/in.jar -C classes . -C build/res . >> sdk/log.txt
+fi
 ${JAVA_HOME}/bin/jar uvfm bin/in.jar build/manifest.mf >> sdk/log.txt
 
 # Get size of previous files
