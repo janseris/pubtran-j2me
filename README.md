@@ -12,6 +12,40 @@ It is a copy of this project's **discord-j2me** fork, reusing its build toolchai
 
 > **Before changing networking or loading screens, read [LESSONS_NOKIA_9300.md](LESSONS_NOKIA_9300.md)**: why Hledat hung on the phone (a full-screen repaint loop during requests) and the rules that prevent it.
 
+## Working configuration (Nokia 9300)
+
+The app works on the phone only **together with the patched TLS library**. Java's `HttpConnection` (`https://`) goes through the phone's `SSLADAPTOR.dll`, and the 9300's original one can't do TLS 1.2. Tested and working on 2026-10-03:
+
+| Part | Version | Where |
+|---|---|---|
+| App | **1.1** (`MIDlet-Version`), tag `v1.1` | `bin/pubtran_s80.jar` + `.jad`, built from this repo |
+| TLS patch | **ssladaptor v10**, [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes` @ `26e5283` (tag `pubtran-v1.1`) | `phone/ssladaptor.dll` → phone `C:\System\Libs\ssladaptor.dll` |
+| BearSSL | [janseris/bearssl-symbian](https://github.com/janseris/bearssl-symbian) `eka1-fixes` @ `5b817d5` | compiled into the DLL |
+
+`phone/ssladaptor_log.dll` is the same v10 with logging. It writes one summary line per connection to `C:\Logs\SSL\SSLLog.txt` when that folder exists. Install it as `ssladaptor.dll` only for diagnosis, and restart the phone after replacing the DLL. Older builds are in the main repo under `symbian-build/out/`.
+
+**What the fork changes in shinovon/symbian-tls (EKA1 / S80v2), and why the app needs it:**
+
+- **SNI for Java:** MIDP's `HttpsConnection` never sets the server name. The handshake is deferred until the first Send, and the host is taken from the request's `Host:` header. Without SNI, pubtran-backend.mapy.cz, Google and Seznam fail. Optional fallback: `C:\System\Data\ssl_sni.txt`.
+- **Reads behave like `RSocket`:** each Recv replaces the buffer contents, which fixes "Unexpected end of stream" with chunked responses. `close_notify` is reported as end of stream (`KErrEof`).
+- **Two-part requests:** a second Send during the deferred handshake is queued. Java sends a POST as two writes, headers then body.
+- **Safe closing:**
+  - Closing completes all pending requests and cancels the socket.
+  - A `close_notify` arriving during a read isn't answered.
+  - After a failed handshake (e.g. the connection closed right after the ClientHello), every later request fails at once instead of hanging (v10). Before, this froze the phone.
+- **Speed:**
+  - **Session resumption** across connections, stored in `C:\System\Data\ssl_sessions.dat`. A resumed handshake takes ~0.25 s instead of ~1 s, for servers that resume by session ID; pubtran-backend does.
+  - **Leaf certificate only:** the chain isn't verified (`NO_VERIFY`, as in the original EKA1 build). This avoids a slow chain check that stalled the phone (-29).
+  - **Socket read-ahead in 16 KB blocks:** HTTPS downloads at 100–140 KB/s instead of ~2 KB/s.
+- **Diagnostics:** the `SSL_LOG` file log. The quiet build writes one summary line per connection and flushes every line. `SSL_LOG_VERBOSE` logs every read but is too slow for timing problems.
+
+**What the app itself must do on the 9300** (details in [LESSONS_NOKIA_9300.md](LESSONS_NOKIA_9300.md)):
+
+- No full-screen repaints in a loop while a request runs.
+- Never close a connection from another thread.
+- One request at a time; abandon a request after 15 s of silence and retry on a new connection, up to 3 times.
+- A new `MIDlet-Version` for every build.
+
 ## Screens
 
 | Screen | What it does | App call |
