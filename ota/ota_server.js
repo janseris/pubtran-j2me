@@ -45,6 +45,19 @@ http.createServer((req, res) => {
         });
         return;
     }
+    if (req.method === "POST" && url === "/results") { // test results POSTed by the app (TlsTestScreen)
+        const chunks = []; req.on("data", d => chunks.push(d)); req.on("end", () => {
+            fs.mkdirSync(path.join(dir, "uploads"), { recursive: true });
+            const out = path.join(dir, "uploads", new Date().toISOString().replace(/[:.]/g, "-") + "_results.txt");
+            const body = Buffer.concat(chunks);
+            fs.writeFileSync(out, body);
+            console.log("  results saved:", out, "(" + body.length + " B)");
+            console.log(body.toString("utf8"));
+            res.writeHead(200, { "Content-Type": "text/plain" });
+            res.end("saved");
+        });
+        return;
+    }
     if (url === "/upload") {
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end('<html><body><h3>Upload</h3><form method="post" action="/upload" enctype="multipart/form-data">'
