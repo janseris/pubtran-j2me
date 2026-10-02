@@ -122,7 +122,17 @@ public class PubtranApi {
     public static FrpcStruct call(String method, FrpcStruct params) throws Exception {
         acquire();
         try {
-            return callLocked(method, params);
+            try {
+                return callLocked(method, params);
+            }
+            catch (java.io.IOException ex) {
+                // A connection error before any response (e.g. the server or the phone's
+                // link closed the TCP connection right after the ClientHello, KErrEof):
+                // try once more on a new connection. Not after a cancel / timeout.
+                if (cancelReason != null) throw ex;
+                RequestLog.persist(new java.util.Date().toString() + "  opakuji " + method + " po chybě: " + ex + "\n");
+                return callLocked(method, params);
+            }
         }
         finally {
             release();
