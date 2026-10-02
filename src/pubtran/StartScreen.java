@@ -268,7 +268,7 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
     protected void keyPressed(int keyCode) {
         // Esc (27) / Clear cancels the request in flight
         if (loading && (keyCode == 27 || keyCode == -8)) {
-            PubtranApi.cancel("Zrušeno", true);
+            RequestThread.cancelActive();
             return;
         }
         super.keyPressed(keyCode);
@@ -278,7 +278,7 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
 
     public void commandAction(Command c, Displayable d) {
         if (c == CANCEL_COMMAND) {
-            PubtranApi.cancel("Zrušeno", true);
+            RequestThread.cancelActive();
             return;
         }
         if (loading) return;

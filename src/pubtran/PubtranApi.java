@@ -91,7 +91,7 @@ public class PubtranApi {
      * Returns the decoded response struct. Every call - successful or not - is
      * recorded in RequestLog with URL, headers, status, timing and TLS details.
      */
-    public static synchronized FrpcStruct call(String method, FrpcStruct params) throws Exception {
+    public static FrpcStruct call(String method, FrpcStruct params) throws Exception {
         byte[] body = Frpc.encode(params);
         String url = BASE_URL + method;
 
@@ -252,7 +252,7 @@ public class PubtranApi {
         }
         finally {
             watchdog.cancel();
-            current = null;
+            if (current == req) current = null;
             // failed before the status arrived: try anyway (the handshake may have completed)
             if (e.tlsInfo == null) e.tlsInfo = req.captureTlsInfo();
         }

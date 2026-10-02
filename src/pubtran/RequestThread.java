@@ -20,6 +20,27 @@ import javax.microedition.lcdui.*;
 public class RequestThread extends Thread {
     private RequestCallback callback;
     private Displayable errorReturnScreen;
+    private LoadingHost host;
+
+    /** The request whose loading UI is shown, so "Zrušit" can release it. */
+    private static volatile RequestThread active;
+    /** Set by cancelActive(): the UI has moved on, ignore whatever this thread returns. */
+    private volatile boolean abandoned;
+
+    /**
+     * "Zrušit": aborts the request in flight and gives the screen back at once, even if
+     * the network call can't be interrupted (e.g. blocked in Connector.open on the 9300);
+     * its late result or error is then ignored.
+     */
+    public static void cancelActive() {
+        RequestThread t = active;
+        if (t == null) return;
+        t.abandoned = true;
+        active = null;
+        PubtranApi.cancel("Zrušeno", true);
+        if (t.host != null) t.host.setLoading(false);
+        App.disp.setCurrent(t.errorReturnScreen);
+    }
 
     public RequestThread(RequestCallback callback, Displayable errorReturnScreen) {
         this.callback = callback;
@@ -27,8 +48,8 @@ public class RequestThread extends Thread {
     }
 
     public void run() {
-        LoadingHost host = (errorReturnScreen instanceof LoadingHost)
-            ? (LoadingHost) errorReturnScreen : null;
+        host = (errorReturnScreen instanceof LoadingHost) ? (LoadingHost) errorReturnScreen : null;
+        active = this;
 
         if (host != null) {
             host.setLoading(true);
@@ -39,7 +60,7 @@ public class RequestThread extends Thread {
             ls.addCommand(cancel);
             ls.setCommandListener(new CommandListener() {
                 public void commandAction(Command c, Displayable d) {
-                    if (c == cancel) PubtranApi.cancel("Zrušeno", true);
+                    if (c == cancel) cancelActive();
                 }
             });
             App.disp.setCurrent(ls);
@@ -47,10 +68,14 @@ public class RequestThread extends Thread {
 
         try {
             Object result = callback.request();
+            if (abandoned) return;
+            active = null;
             if (host != null) host.setLoading(false);
             callback.onSuccess(result);
         }
         catch (Exception e) {
+            if (abandoned) return;
+            active = null;
             if (host != null) host.setLoading(false);
             e.printStackTrace();
             if (PubtranApi.cancelledByUser) { // "Zrušit": back without an error
