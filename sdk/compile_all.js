@@ -7,7 +7,7 @@ const compileScript = win ? "powershell" : "sdk/compile.sh";
 const compileScriptArgs = win ? ["sdk\\compile.ps1"] : [];
 const classpathJoiner = win ? ";" : ":";
 
-// Every build gets a new MIDlet-Version, as major.minor only (1.14 -> 1.15 ... 1.99 -> 2.0):
+// Every build gets a new MIDlet-Version, as major.minor only (1.1 -> 1.2 ... 1.99 -> 2.0):
 // the Nokia 9300 shows just "major.minor", so a micro part can't be seen on the phone.
 // The 9300 refuses ("Invalid archive") a jar whose name, vendor and version match an
 // already known suite but whose content differs, even after uninstalling. With a new
