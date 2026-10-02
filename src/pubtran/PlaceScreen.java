@@ -112,6 +112,7 @@ public class PlaceScreen extends Canvas implements CommandListener {
     private String lastSearched;
     /** A suggest request is in flight - don't start another one. */
     private volatile boolean busy;
+    private volatile long busySince;
 
     /** Pending search-as-you-type request (fires after a typing pause). */
     private java.util.Timer typeTimer;
@@ -159,8 +160,11 @@ public class PlaceScreen extends Canvas implements CommandListener {
             showRecent();
             return;
         }
-        if (busy) return; // one request at a time
+        // one request at a time - unless the running one is stuck (it isn't closed, see
+        // PubtranApi.cancel; give up on it after the stall timeout)
+        if (busy && System.currentTimeMillis() - busySince < PubtranApi.STALL_TIMEOUT_MS) return;
         busy = true;
+        busySince = System.currentTimeMillis();
         final int gen = ++generation;
         lastSearched = q;
         new Thread() {

@@ -66,19 +66,22 @@ public class PubtranApi {
     /** Time of the last sign of life of the request in flight (start, progress). */
     private static volatile long lastActivity;
 
-    /** Aborts the request in flight from another thread: "Zrušit" or the stall watchdog. */
+    /**
+     * Gives up on the request in flight ("Zrušit" or the stall watchdog). It is NOT
+     * closed: closing an HttpConnection from another thread while the Java comms thread
+     * is inside the TLS patch crashed the 9300 (KERN-EXEC 3 in jes-dd-java-comms) or
+     * froze it on the next request. The request is left to finish or fail on its own;
+     * its result is ignored (RequestThread.cancelActive / stall).
+     */
     public static void cancel(String reason, boolean byUser) {
-        final NativeHttp req = current;
-        if (req == null || cancelReason != null) return;
+        if (current == null || cancelReason != null) return;
         cancelReason = reason;
         cancelledByUser = byUser;
-        // closing can block on the phone, so not on the UI thread
-        new Thread() {
-            public void run() {
-                req.abort();
-            }
-        }.start();
+        release(); // don't make the next request wait for the abandoned one
     }
+
+    /** The thread running the request in flight (for the stall watchdog). */
+    private static volatile Thread owner;
 
     public static boolean isBusy() {
         return current != null;
@@ -91,7 +94,42 @@ public class PubtranApi {
      * Returns the decoded response struct. Every call - successful or not - is
      * recorded in RequestLog with URL, headers, status, timing and TLS details.
      */
+    private static final Object LOCK = new Object();
+    private static boolean inFlight;
+
+    /**
+     * One request at a time (a suggest typed in the place picker and a search must not
+     * run two TLS connections through the patch at once). Waits for the previous one,
+     * but at most STALL_TIMEOUT_MS: an abandoned, stuck request mustn't block forever.
+     */
+    private static void acquire() {
+        synchronized (LOCK) {
+            long end = System.currentTimeMillis() + STALL_TIMEOUT_MS;
+            while (inFlight && System.currentTimeMillis() < end) {
+                try { LOCK.wait(500); } catch (InterruptedException e) {}
+            }
+            inFlight = true;
+        }
+    }
+
+    private static void release() {
+        synchronized (LOCK) {
+            inFlight = false;
+            LOCK.notifyAll();
+        }
+    }
+
     public static FrpcStruct call(String method, FrpcStruct params) throws Exception {
+        acquire();
+        try {
+            return callLocked(method, params);
+        }
+        finally {
+            release();
+        }
+    }
+
+    private static FrpcStruct callLocked(String method, FrpcStruct params) throws Exception {
         byte[] body = Frpc.encode(params);
         String url = BASE_URL + method;
 
@@ -218,6 +256,7 @@ public class PubtranApi {
         });
 
         current = req;
+        owner = Thread.currentThread();
         cancelReason = null;
         cancelledByUser = false;
         lastActivity = System.currentTimeMillis();
@@ -225,7 +264,10 @@ public class PubtranApi {
         watchdog.schedule(new java.util.TimerTask() {
             public void run() {
                 if (System.currentTimeMillis() - lastActivity > STALL_TIMEOUT_MS) {
-                    PubtranApi.cancel("Server neodpověděl " + (STALL_TIMEOUT_MS / 1000) + " s, požadavek zrušen", false);
+                    String why = "Server neodpověděl " + (STALL_TIMEOUT_MS / 1000) + " s, požadavek zrušen";
+                    PubtranApi.cancel(why, false);
+                    RequestThread.stall(owner, why);
+                    cancel();
                 }
             }
         }, 2000, 2000);

@@ -32,6 +32,18 @@ public class RequestThread extends Thread {
      * the network call can't be interrupted (e.g. blocked in Connector.open on the 9300);
      * its late result or error is then ignored.
      */
+    /** Stall watchdog: if thread t is the active request, give the screen back with an error. */
+    public static void stall(Thread t, String reason) {
+        RequestThread r = active;
+        if (r == null || r != t) return;
+        r.abandoned = true;
+        active = null;
+        if (r.host != null) r.host.setLoading(false);
+        Alert alert = new Alert("Chyba požadavku", reason, null, AlertType.ERROR);
+        alert.setTimeout(Alert.FOREVER);
+        App.disp.disp.setCurrent(alert, r.errorReturnScreen);
+    }
+
     public static void cancelActive() {
         RequestThread t = active;
         if (t == null) return;
