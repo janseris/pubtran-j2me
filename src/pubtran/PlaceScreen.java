@@ -18,9 +18,12 @@ import javax.microedition.lcdui.*;
  *   * Olomouc   Statutární město, Česko
  *   * Olomouc město   Vlaková stanice, ...
  *
- * Typing on the Communicator's keyboard goes straight into the search field; Enter
- * (or "Hledat") sends ONE suggest request - nothing is sent while typing, because on
- * the 9300 each request is a full TLS handshake that ties up the phone. Clicking the field, or the
+ * Typing on the Communicator's keyboard goes straight into the search field. With
+ * "search as you type" on (default, AppSettings), a suggest request is sent when typing
+ * pauses for SEARCH_DELAY_MS (from 2 characters); while one request is running, further
+ * typing waits for it and then sends one request for the latest text. Off: only Enter
+ * (or "Hledat") searches - each request on the 9300 is a new TLS connection (~1-2 s).
+ * Clicking the field, or the
  * "Upravit text" command, opens the phone's native text editor instead (for accents,
  * and for emulators that don't pass letter keys to a Canvas). With an empty field the
  * recently used places are listed.
@@ -34,6 +37,13 @@ public class PlaceScreen extends Canvas implements CommandListener {
     private static final Command SEARCH_COMMAND = new Command("Hledat", Command.SCREEN, 3);
     private static final Command CLEAR_COMMAND = new Command("Bez zastávky Přes", Command.SCREEN, 4);
     private static final Command BACK_COMMAND = new Command("Zpět", Command.BACK, 5);
+    private static final Command TYPE_SEARCH_OFF = new Command("Hledat při psaní: vypnout", Command.SCREEN, 6);
+    private static final Command TYPE_SEARCH_ON = new Command("Hledat při psaní: zapnout", Command.SCREEN, 6);
+
+    /** Typing pause after which search-as-you-type sends a request. */
+    private static final int SEARCH_DELAY_MS = 700;
+    /** Search-as-you-type starts from this many characters. */
+    private static final int MIN_CHARS = 2;
 
     private static final Command TB_OK = new Command("Hledat", Command.OK, 1);
     private static final Command TB_CANCEL = new Command("Zpět", Command.BACK, 2);
@@ -81,6 +91,7 @@ public class PlaceScreen extends Canvas implements CommandListener {
         addCommand(SEARCH_COMMAND);
         if (which == StartScreen.VIA) addCommand(CLEAR_COMMAND);
         addCommand(BACK_COMMAND);
+        addCommand(AppSettings.searchAsYouType() ? TYPE_SEARCH_OFF : TYPE_SEARCH_ON);
         setCommandListener(this);
 
         showRecent();
@@ -102,20 +113,43 @@ public class PlaceScreen extends Canvas implements CommandListener {
     /** A suggest request is in flight - don't start another one. */
     private volatile boolean busy;
 
+    /** Pending search-as-you-type request (fires after a typing pause). */
+    private java.util.Timer typeTimer;
+
     /**
-     * Typing only edits the text - nothing is sent. On the 9300 every request is a new
-     * connection with a full TLS handshake (the EKA1 TLS patch has no session
-     * resumption), and firing one per typing pause made the phone unresponsive.
+     * Search as you type (default): a request is sent once typing pauses. Off: typing
+     * only edits the text and Enter / "Hledat" sends the request.
      */
     private void queryEdited() {
         generation++; // results on screen no longer match the text
-        if (query.trim().length() == 0) {
+        cancelTypeTimer();
+        String q = query.trim();
+        if (q.length() == 0) {
             lastSearched = null;
             showRecent();
             return;
         }
-        status = "Enter = hledat";
+        if (AppSettings.searchAsYouType() && q.length() >= MIN_CHARS) {
+            status = busy ? "Hledám... (pak \"" + q + "\")" : "Hledání po pauze v psaní...";
+            typeTimer = new java.util.Timer();
+            typeTimer.schedule(new java.util.TimerTask() {
+                public void run() {
+                    // a request is running: it searches again for the latest text when it ends
+                    if (!busy && !query.trim().equals(lastSearched)) searchNow();
+                }
+            }, SEARCH_DELAY_MS);
+        }
+        else {
+            status = AppSettings.searchAsYouType() ? "Pište dál, nebo Enter = hledat" : "Enter = hledat";
+        }
         repaint();
+    }
+
+    private void cancelTypeTimer() {
+        if (typeTimer != null) {
+            typeTimer.cancel();
+            typeTimer = null;
+        }
     }
 
     /** Sends one suggest request for the current text (Enter / "Hledat" / editor OK). */
@@ -136,6 +170,12 @@ public class PlaceScreen extends Canvas implements CommandListener {
                 }
                 finally {
                     busy = false;
+                }
+                // typed on while this request ran: search once more for the latest text
+                String now = query.trim();
+                if (AppSettings.searchAsYouType() && now.length() >= MIN_CHARS
+                        && !now.equals(lastSearched) && App.disp.getCurrent() == PlaceScreen.this) {
+                    searchNow();
                 }
             }
         }.start();
@@ -176,6 +216,7 @@ public class PlaceScreen extends Canvas implements CommandListener {
     }
 
     private void goBack() {
+        cancelTypeTimer();
         generation++; // drop any late suggest result
         back.refresh();
         App.disp.setCurrent(back);
@@ -250,7 +291,7 @@ public class PlaceScreen extends Canvas implements CommandListener {
         int tx = 8 + fontPlain.stringWidth(label);
         if (query.length() == 0) {
             g.setColor(HINT);
-            g.drawString("pište a stiskněte Enter, nebo sem klikněte", tx, 6, Graphics.TOP | Graphics.LEFT);
+            g.drawString((AppSettings.searchAsYouType() ? "pište název, nebo sem klikněte" : "pište a stiskněte Enter, nebo sem klikněte"), tx, 6, Graphics.TOP | Graphics.LEFT);
         }
         else {
             g.setColor(TEXT);
@@ -442,6 +483,15 @@ public class PlaceScreen extends Canvas implements CommandListener {
         }
         else if (c == BACK_COMMAND) {
             goBack();
+        }
+        else if (c == TYPE_SEARCH_OFF || c == TYPE_SEARCH_ON) {
+            boolean on = c == TYPE_SEARCH_ON;
+            AppSettings.setSearchAsYouType(on);
+            removeCommand(c);
+            addCommand(on ? TYPE_SEARCH_OFF : TYPE_SEARCH_ON);
+            if (!on) cancelTypeTimer();
+            status = on ? "Hledání při psaní zapnuto." : "Hledání při psaní vypnuto - Enter = hledat.";
+            repaint();
         }
     }
 }
