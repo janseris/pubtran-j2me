@@ -24,6 +24,8 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         LoadingScreen.StatusSource {
     private static final Command RUN_ONE = new Command("Otestovat server", Command.ITEM, 1);
     private static final Command RUN_ALL = new Command("Otestovat lehké stránky", Command.ITEM, 2);
+    private static final Command RUN_FILES = new Command("Otestovat pubtran a soubory", Command.ITEM, 3);
+    private static final Command SEND_COMMAND = new Command("Odeslat výsledky na PC", Command.SCREEN, 4);
     private static final Command BACK_COMMAND = new Command("Zpět", Command.BACK, 3);
     /** On the progress screen: back to the form while the test keeps running. */
     private static final Command HIDE_COMMAND = new Command("Skrýt", Command.BACK, 1);
@@ -48,6 +50,19 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         "text.npr.org/robots.txt",
         "example.com/",
     };
+    /**
+     * Second batch: pubtran-backend 3 times (TLS session resumption), then download speed
+     * once per file: HTTPS (cdnjs, ~87 KB and ~600 KB) vs. plain HTTP (100 KB and 1 MB).
+     */
+    private static final String[] FILES = {
+        "pubtran-backend.mapy.cz/api/v1/",
+        "cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js",
+        "http://speedtest.tele2.net/100KB.zip",
+        "cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+        "http://speedtest.tele2.net/1MB.zip",
+    };
+    private static final int[] FILES_ATTEMPTS = {3, 1, 1, 1, 1};
+
     /** Selectable one by one (not part of the batch). */
     private static final String[] HEAVY = {
         "www.seznam.cz",
@@ -75,6 +90,11 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
     private final TextField host = new TextField("Server (cesta volitelná):", LIGHT[0], 160, TextField.URL);
     private final StringItem runOneButton = new StringItem(null, "Otestovat server", Item.BUTTON);
     private final StringItem runAllButton = new StringItem(null, "Otestovat lehké stránky", Item.BUTTON);
+    private final StringItem runFilesButton = new StringItem(null, "Otestovat pubtran a soubory", Item.BUTTON);
+    /** The PC running ota/ota_server.js: results are POSTed to http://<pc>/results after each run. */
+    private final TextField pcField = new TextField("PC pro výsledky (prázdné = neposílat):", "192.168.137.1:8000", 64, TextField.URL);
+    /** Start of the current run in lines (only that part is sent to the PC). */
+    private int runStart;
     private final StringItem status = new StringItem("Stav:", "Připraveno.");
     private final StringItem results = new StringItem("Výsledky:", "-");
     private final StringItem tls = new StringItem("TLS a certifikát (poslední úspěšný):", "-");
@@ -114,26 +134,31 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
 
         runOneButton.setDefaultCommand(RUN_ONE);
         runAllButton.setDefaultCommand(RUN_ALL);
-        Item[] focusable = {runOneButton, runAllButton, transport, preset, host};
+        runFilesButton.setDefaultCommand(RUN_FILES);
+        Item[] focusable = {runOneButton, runAllButton, runFilesButton, transport, preset, host, pcField};
         for (int i = 0; i < focusable.length; i++) {
             if (focusable[i] != runOneButton) focusable[i].addCommand(RUN_ONE);
             if (focusable[i] != runAllButton) focusable[i].addCommand(RUN_ALL);
+            if (focusable[i] != runFilesButton) focusable[i].addCommand(RUN_FILES);
             focusable[i].setItemCommandListener(this);
         }
         runOneButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE);
-        runAllButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
+        runFilesButton.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
 
         append(runOneButton);  // first focusable item -> focused when the screen opens
         append(runAllButton);
+        append(runFilesButton);
         append(info);
         append(transport);
         append(preset);
         append(host);
+        append(pcField);
         append(status);
         append(results);
         append(tls);
 
         addCommand(BACK_COMMAND);
+        addCommand(SEND_COMMAND);
         setCommandListener(this);
         setItemStateListener(this);
     }
@@ -147,10 +172,21 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
     }
 
     private void start(final String[] targets) {
+        int[] attempts = new int[targets.length];
+        for (int i = 0; i < attempts.length; i++) attempts[i] = ATTEMPTS;
+        start(targets, attempts);
+    }
+
+    private void start(final String[] targets, final int[] attempts) {
         if (running) return;
         running = true;
         runOneButton.setText("Test probíhá...");
         runAllButton.setText("");
+        runFilesButton.setText("");
+        if (lines.length() > 0) lines.append("\n\n");
+        runStart = lines.length();
+        lines.append("=== ").append(System.getProperty("microedition.platform")).append(", ")
+            .append(new java.util.Date().toString()).append(" ===");
         progressScreen = new LoadingScreen("HTTPS test", this);
         progressScreen.addCommand(HIDE_COMMAND);
         progressScreen.setCommandListener(this);
@@ -158,10 +194,12 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
         new Thread() {
             public void run() {
                 try {
-                    curTotal = targets.length * ATTEMPTS;
+                    curTotal = 0;
+                    for (int i = 0; i < targets.length; i++) curTotal += attempts[i];
+                    curIndex = 0;
                     for (int i = 0; i < targets.length; i++) {
-                        for (int a = 1; a <= ATTEMPTS; a++) {
-                            curIndex = i * ATTEMPTS + a;
+                        for (int a = 1; a <= attempts[i]; a++) {
+                            curIndex++;
                             curAttempt = a;
                             curName = targets[i];
                             status.setText(curIndex + "/" + curTotal + ": " + targets[i] + " (" + a + ". pokus) ...");
@@ -173,9 +211,14 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
                 catch (Throwable e) {
                     status.setText("Chyba testu: " + e);
                 }
+                if (pcField.getString().trim().length() > 0) {
+                    setPhase("Odesílání výsledků na PC");
+                    status.setText(status.getText() + " " + sendResults());
+                }
                 running = false;
                 runOneButton.setText("Otestovat server");
                 runAllButton.setText("Otestovat lehké stránky");
+                runFilesButton.setText("Otestovat pubtran a soubory");
                 if (App.disp.getCurrent() == progressScreen) App.disp.setCurrent(TlsTestScreen.this);
                 progressScreen = null;
             }
@@ -372,9 +415,53 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
     public void commandAction(Command c, Item item) {
         if (c == RUN_ONE) start(new String[] {host.getString()});
         else if (c == RUN_ALL) start(LIGHT);
+        else if (c == RUN_FILES) start(FILES, FILES_ATTEMPTS);
+    }
+
+    /**
+     * POSTs the current run's results as UTF-8 text to http://<pc>/results (ota_server.js
+     * saves them in ota/uploads/), so they don't have to be copied from the screen by hand.
+     * Plain HTTP: doesn't go through the TLS patch. Returns a short status for the screen.
+     */
+    private String sendResults() {
+        javax.microedition.io.HttpConnection hc = null;
+        java.io.OutputStream os = null;
+        try {
+            String pc = pcField.getString().trim();
+            if (pc.startsWith("http://")) pc = pc.substring(7);
+            if (pc.endsWith("/")) pc = pc.substring(0, pc.length() - 1);
+            byte[] body = lines.toString().substring(runStart).getBytes("UTF-8");
+            hc = (javax.microedition.io.HttpConnection) javax.microedition.io.Connector.open("http://" + pc + "/results");
+            hc.setRequestMethod(javax.microedition.io.HttpConnection.POST);
+            hc.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
+            hc.setRequestProperty("Content-Length", String.valueOf(body.length));
+            os = hc.openOutputStream();
+            os.write(body);
+            os.close();
+            os = null;
+            int code = hc.getResponseCode();
+            return code == 200 ? "Výsledky odeslány na PC." : "Odeslání na PC: HTTP " + code;
+        }
+        catch (Throwable e) {
+            return "Odeslání na PC selhalo: " + e;
+        }
+        finally {
+            try { if (os != null) os.close(); } catch (Throwable e) {}
+            try { if (hc != null) hc.close(); } catch (Throwable e) {}
+        }
     }
 
     public void commandAction(Command c, Displayable d) {
+        if (c == SEND_COMMAND) {
+            if (running) return;
+            new Thread() {
+                public void run() {
+                    status.setText("Odesílání výsledků na PC...");
+                    status.setText(sendResults());
+                }
+            }.start();
+            return;
+        }
         if (c == HIDE_COMMAND) {
             App.disp.setCurrent(this);
             return;
