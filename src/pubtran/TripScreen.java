@@ -15,7 +15,7 @@ import javax.microedition.lcdui.*;
  * relative to the ORIGINAL ride (-1, +1, +2, ...), just like the app. Loaded runs are
  * cached, and each one's realtime delays are fetched right after it (gettripinfos).
  */
-public class TripScreen extends Form implements CommandListener {
+public class TripScreen extends CardCanvas implements CommandListener {
     private static final Command BACK_COMMAND = new Command("Zpět", Command.BACK, 0);
     private static final Command PREV_COMMAND = new Command("< Předchozí spoj", Command.SCREEN, 1);
     private static final Command NEXT_COMMAND = new Command("Následující spoj >", Command.SCREEN, 2);
@@ -29,7 +29,7 @@ public class TripScreen extends Form implements CommandListener {
     private RoutePart current;
 
     public TripScreen(RoutePart original, SearchState modes, Displayable back) {
-        super(original.title());
+        setTitle(original.title());
         this.original = original;
         this.modes = modes;
         this.back = back;
@@ -88,67 +88,147 @@ public class TripScreen extends Form implements CommandListener {
     }
 
     private synchronized void render() {
-        deleteAll();
         RoutePart r = current;
         setTitle(r.title() + "  " + positionLabel());
-
-        Font bold = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
-        Font plain = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_MEDIUM);
-        Font small = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_SMALL);
-
-        TripStop b = r.boarding();
-        TripStop a = r.alighting();
-        String delay = Fmt.delay(r.delaySeconds());
-        StringItem head = new StringItem(null,
-            r.title() + (r.agency.length() > 0 ? " (" + r.agency + ")" : "") + (delay.length() > 0 ? "  " + delay : "")
-            + "\n" + (b != null ? b.name : "?") + " " + Fmt.timeWithDay(r.departureIso, original.departureIso)
-            + "  ->  " + (a != null ? a.name : "?") + " " + Fmt.timeWithDay(r.arrivalIso, original.departureIso)
-            + " (" + Fmt.minutesBetween(r.departureIso, r.arrivalIso) + " min)");
-        head.setFont(bold);
-        head.setLayout(Item.LAYOUT_NEWLINE_AFTER);
-        append(head);
-
-        int n = r.stops.size();
-        for (int i = 0; i < n; i++) {
-            TripStop s = (TripStop) r.stops.elementAt(i);
-            boolean ridden = i >= r.startIndex && i <= r.endIndex;
-            boolean endpoint = i == r.startIndex || i == r.endIndex;
-
-            String arr = i == 0 ? "     " : Fmt.time(s.arrivalIso);
-            String dep = i == n - 1 ? "     " : Fmt.time(s.departureIso);
-            StringBuffer line = new StringBuffer();
-            line.append(ridden ? (endpoint ? "> " : "| ") : "  ");
-            line.append(arr).append(" ").append(dep).append("  ").append(s.name);
-
-            String plat = Fmt.platform(r, s, i == r.startIndex, i == r.endIndex);
-            if (plat != null) line.append("  [nást. ").append(plat).append("]");
-            String zone = s.code(Info.STOP_ZONE);
-            if (zone != null && zone.length() > 0) line.append("  pásmo ").append(zone);
-            String notes = Fmt.stopNotes(s, r);
-            if (notes.length() > 0) line.append("  (").append(notes).append(")");
-
-            StringItem item = new StringItem(null, line.toString());
-            item.setFont(endpoint ? bold : (ridden ? plain : small));
-            item.setLayout(Item.LAYOUT_NEWLINE_AFTER);
-            append(item);
-        }
+        java.util.Vector rs = new java.util.Vector();
+        rs.addElement(new HeadRow(r));
+        TimelineRow t = new TimelineRow(r);
+        rs.addElement(t);
 
         StringBuffer extra = new StringBuffer();
         String am = Fmt.amenities(r);
-        if (am.length() > 0) extra.append("Vybavení: ").append(am);
+        if (am.length() > 0) rs.addElement(new TextRow("Vybavení: " + am, Theme.SMALL, Theme.TEXT_DIM));
         java.util.Vector w = r.warnings();
         for (int i = 0; i < w.size(); i++) {
             Info x = (Info) w.elementAt(i);
-            if (extra.length() > 0) extra.append('\n');
-            extra.append("! ").append(x.text.trim());
-            if (x.url != null) extra.append(" (").append(x.url).append(")");
+            rs.addElement(new TextRow("! " + x.text.trim() + (x.url != null ? " (" + x.url + ")" : ""), Theme.SMALL, Theme.WARNING));
         }
-        if (extra.length() > 0) extra.append('\n');
-        extra.append("tripId: ").append(r.partDescription);
-        StringItem e = new StringItem(null, extra.toString());
-        e.setFont(small);
-        e.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-        append(e);
+        rs.addElement(new TextRow("tripId: " + r.partDescription, Theme.SMALL, Theme.TEXT_FAINT));
+        setRows(rs, -1);
+        // start at the boarding stop
+        scrollToRow(1, t.lineH() * Math.max(0, r.startIndex - 1));
+    }
+
+    /** Line badge, name, carrier, delay; boarding -> alighting with times; which run. */
+    private class HeadRow extends Row {
+        private final RoutePart r;
+
+        HeadRow(RoutePart r) {
+            this.r = r;
+        }
+
+        public int height(int w) {
+            return 4 + Theme.badgeHeight() + 2 + Theme.SMALL.getHeight() + 4;
+        }
+
+        public void paint(Graphics g, int x, int y, int w, boolean focus) {
+            card(g, x, y, w, height(w), false);
+            int lx = x + 8;
+            int ly = y + 4;
+            int bw = Theme.drawBadge(g, r, lx, ly);
+            int delay = r.delaySeconds();
+            int dw = Theme.delayWidth(delay);
+            g.setFont(Theme.BOLD);
+            g.setColor(Theme.TEXT);
+            Theme.drawClipped(g, r.title() + (r.agency.length() > 0 ? "  (" + r.agency + ")" : ""),
+                lx + bw + 8, ly + (Theme.badgeHeight() - Theme.BOLD.getHeight()) / 2, x + w - 12 - dw - (lx + bw + 8));
+            if (dw > 0) Theme.drawDelay(g, delay, x + w - 6 - dw, ly + (Theme.badgeHeight() - Theme.SMALL_BOLD.getHeight() - 2) / 2);
+            TripStop b = r.boarding();
+            TripStop a = r.alighting();
+            g.setFont(Theme.SMALL);
+            g.setColor(Theme.TEXT_DIM);
+            Theme.drawClipped(g, (b != null ? b.name : "?") + " " + Fmt.timeWithDay(r.departureIso, original.departureIso)
+                + "  ->  " + (a != null ? a.name : "?") + " " + Fmt.timeWithDay(r.arrivalIso, original.departureIso)
+                + "  (" + Fmt.minutesBetween(r.departureIso, r.arrivalIso) + " min)   " + positionLabel() + "   < >",
+                lx, ly + Theme.badgeHeight() + 2, w - 16);
+        }
+    }
+
+    /**
+     * All stops of the trip on a vertical line: in the line colour for the ridden part,
+     * grey outside it; big dots at boarding and alighting. Columns: arrival, departure,
+     * stop, platform, zone, notes.
+     */
+    private class TimelineRow extends Row {
+        private final RoutePart r;
+
+        TimelineRow(RoutePart r) {
+            this.r = r;
+        }
+
+        int lineH() {
+            return Theme.PLAIN.getHeight() + 1;
+        }
+
+        public int height(int w) {
+            return r.stops.size() * lineH();
+        }
+
+        public void paint(Graphics g, int x, int y, int w, boolean focus) {
+            int n = r.stops.size();
+            int lh = lineH();
+            int cx = x + 10;
+            int timeW = Theme.PLAIN.stringWidth("00:00") + 6;
+            int clipTop = g.getClipY(), clipBottom = clipTop + g.getClipHeight();
+            int color = Theme.color(r);
+            for (int i = 0; i < n; i++) {
+                int ly = y + i * lh;
+                if (ly + lh < clipTop || ly > clipBottom) continue;
+                TripStop s = (TripStop) r.stops.elementAt(i);
+                boolean ridden = i >= r.startIndex && i <= r.endIndex;
+                boolean endpoint = i == r.startIndex || i == r.endIndex;
+                int mid = ly + lh / 2;
+
+                // line segments above and below the dot
+                if (i > 0) {
+                    g.setColor(i > r.startIndex && i <= r.endIndex ? color : Theme.SEPARATOR);
+                    g.fillRect(cx - 1, ly, 3, lh / 2);
+                }
+                if (i < n - 1) {
+                    g.setColor(i >= r.startIndex && i < r.endIndex ? color : Theme.SEPARATOR);
+                    g.fillRect(cx - 1, mid, 3, lh - lh / 2);
+                }
+                int d = endpoint ? 9 : 5;
+                g.setColor(ridden ? color : Theme.SEPARATOR);
+                g.fillArc(cx - d / 2, mid - d / 2, d, d, 0, 360);
+                if (endpoint) {
+                    g.setColor(Theme.BG);
+                    g.fillArc(cx - 2, mid - 2, 4, 4, 0, 360);
+                }
+
+                Font f = endpoint ? Theme.BOLD : Theme.PLAIN;
+                int tc = endpoint ? Theme.TEXT : (ridden ? Theme.TEXT_DIM : Theme.TEXT_FAINT);
+                g.setFont(f);
+                g.setColor(tc);
+                int tx = cx + 12;
+                if (i > 0) g.drawString(Fmt.time(s.arrivalIso), tx, ly, Graphics.TOP | Graphics.LEFT);
+                if (i < n - 1) g.drawString(Fmt.time(s.departureIso), tx + timeW, ly, Graphics.TOP | Graphics.LEFT);
+                int nx = tx + 2 * timeW + 4;
+                g.drawString(s.name, nx, ly, Graphics.TOP | Graphics.LEFT);
+                nx += f.stringWidth(s.name) + 8;
+
+                StringBuffer more = new StringBuffer();
+                String plat = Fmt.platform(r, s, i == r.startIndex, i == r.endIndex);
+                if (plat != null) more.append("nást. ").append(plat);
+                String zone = s.code(Info.STOP_ZONE);
+                if (zone != null && zone.length() > 0) more.append(more.length() > 0 ? ", " : "").append("pásmo ").append(zone);
+                String notes = Fmt.stopNotes(s, r);
+                if (notes.length() > 0) more.append(more.length() > 0 ? ", " : "").append(notes);
+                if (more.length() > 0) {
+                    g.setFont(Theme.SMALL);
+                    g.setColor(Theme.TEXT_FAINT);
+                    Theme.drawClipped(g, more.toString(), nx, ly + 1, x + w - 6 - nx);
+                }
+            }
+        }
+    }
+
+    protected void onLeft() {
+        load(offset - 1, false);
+    }
+
+    protected void onRight() {
+        load(offset + 1, false);
     }
 
     private String positionLabel() {
@@ -158,6 +238,7 @@ public class TripScreen extends Form implements CommandListener {
     }
 
     public void commandAction(Command c, Displayable d) {
+        if (handleCommand(c)) return;
         if (c == BACK_COMMAND) {
             App.disp.setCurrent(back);
         }
