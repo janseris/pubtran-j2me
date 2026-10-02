@@ -104,7 +104,7 @@ Output: `bin/pubtran_s80.jar` (unsigned, native TLS). Install the `.jar` as befo
 
 **The jar is unsigned, and it has to be.** See [Why the jar can't be signed](#why-the-jar-cant-be-signed-nokia-9300) below.
 
-**Every build gets a new `MIDlet-Version`.** `sdk/compile_all.js` raises it in `manifest.mf` (1.0.3 → 1.0.4 …), so install a new build over the old one as an update. The 9300 rejects a jar with the same name, vendor and version as a suite it already knows but different content, as "Neplatný archív aplikace" (invalid archive). This happened even after uninstalling, and whether the jar came over the browser or Bluetooth. To build without the bump, set `NO_VERSION_BUMP=1`.
+**Every build gets a new `MIDlet-Version`.** `sdk/compile_all.js` raises it in `manifest.mf` (1.0.3 → 1.0.4 …), so install a new build over the old one as an update. The 9300 rejects a jar with the same name, vendor and version as a suite it already knows but different content, as "Neplatný archív aplikace" (invalid archive). This happened even after uninstalling, and whether the jar came over the browser or Bluetooth. A jar with a different `MIDlet-Name` installs too, as a second app. Earlier builds installed with Nokia Application Installer (PC Suite 6.6) may not have hit this. To build without the bump, set `NO_VERSION_BUMP=1`.
 
 Install the `.jar` directly, not the `.jad`. Over the air, the 9300 rejects our `.jad` before it downloads the jar. The server in `ota/` (`start_ota_server.bat`, port 8000) serves the jar and the TLS DLLs, and has an `/upload` page for sending logs from the phone to the PC.
 
