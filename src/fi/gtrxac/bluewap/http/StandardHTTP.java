@@ -39,7 +39,9 @@ public class StandardHTTP extends HTTP {
 
 	private InputStream makeRequestFinal(String finalUrl) throws Exception {
 		queueItem = HTTPQueue.newQueueItem();
+		tStart = System.currentTimeMillis();
 		hc = (HttpConnection) openConnection(finalUrl);
+		tOpened = System.currentTimeMillis();
 		queueItem.hc = hc;
 
 		try {
@@ -57,11 +59,14 @@ public class StandardHTTP extends HTTP {
 
 		if (data != null) {
 			os = hc.openOutputStream();
+			tStreamOpened = System.currentTimeMillis();
 			queueItem.os = os;
 			os.write(data);
+			tWritten = System.currentTimeMillis();
 		}
 
 		responseCode = hc.getResponseCode();
+		tResponse = System.currentTimeMillis();
 		InputStream result = hc.openInputStream();
 		queueItem.is = result;
 

@@ -40,6 +40,8 @@ public class LogEntry {
 
     // --- HTTP ---
     public String statusLine;
+    /** Where the time went (ms since the request started): see HTTP.tOpened etc. */
+    public String phases;
     public String requestHeaders;
     public String responseHeaders;
 
@@ -54,6 +56,7 @@ public class LogEntry {
         if (waitMs >= 0) sb.append(", do odpovědi ").append(waitMs).append(" ms");
         if (downloadMs >= 0) sb.append(", stahování ").append(downloadMs).append(" ms");
         sb.append(", odesláno ").append(requestBytes).append(" B, přijato ").append(responseBytes).append(" B\n");
+        if (phases != null) sb.append("  fáze: ").append(phases).append('\n');
         if (statusLine != null) sb.append("  ").append(statusLine).append('\n');
         if (requestHeaders != null) sb.append("  > ").append(requestHeaders).append('\n');
         if (responseHeaders != null && responseHeaders.length() > 0) sb.append("  < ").append(responseHeaders).append('\n');

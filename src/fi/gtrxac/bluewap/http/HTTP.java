@@ -43,6 +43,12 @@ public abstract class HTTP {
 	protected byte[] responseBytes;
 	protected InputStream is;
 	protected ProgressListener progressListener;
+	/**
+	 * Phase timestamps of the last request (System.currentTimeMillis(), 0 = not reached):
+	 * Connector.open returned, openOutputStream returned, body written, response code.
+	 * On the 9300 they show where a slow request spends its time.
+	 */
+	public long tStart, tOpened, tStreamOpened, tWritten, tResponse;
 	private boolean requestMade;
 
 	protected HTTP(String method, String url) {

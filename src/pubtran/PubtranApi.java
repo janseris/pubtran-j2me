@@ -56,7 +56,7 @@ public class PubtranApi {
      * No data for this long (connecting, waiting for the response or between body
      * chunks) aborts the request. On the 9300 a request normally answers in 1-3 s.
      */
-    public static final int STALL_TIMEOUT_MS = 30000;
+    public static final int STALL_TIMEOUT_MS = 60000;
     /** The request in flight (native transport), so cancel() can close it. */
     private static volatile NativeHttp current;
     /** Set by cancel(): the reason the request in flight was aborted. */
@@ -293,11 +293,31 @@ public class PubtranApi {
             throw ex;
         }
         finally {
+            e.phases = phases(req);
             watchdog.cancel();
             if (current == req) current = null;
             // failed before the status arrived: try anyway (the handshake may have completed)
             if (e.tlsInfo == null) e.tlsInfo = req.captureTlsInfo();
         }
+    }
+
+    /** "open 5 ms, výstup 38200 ms, zápis 40 ms, odpověď 900 ms" - each phase's duration. */
+    static String phases(fi.gtrxac.bluewap.http.HTTP r) {
+        if (r.tStart == 0) return "nezačal";
+        StringBuffer sb = new StringBuffer();
+        long prev = r.tStart;
+        long[] t = {r.tOpened, r.tStreamOpened, r.tWritten, r.tResponse};
+        String[] n = {"Connector.open", "openOutputStream (DNS+TCP+TLS?)", "zápis těla", "čekání na odpověď"};
+        for (int i = 0; i < t.length; i++) {
+            if (sb.length() > 0) sb.append(", ");
+            if (t[i] == 0) {
+                sb.append(n[i]).append(" nedokončeno po ").append(System.currentTimeMillis() - prev).append(" ms");
+                break;
+            }
+            sb.append(n[i]).append(' ').append(t[i] - prev).append(" ms");
+            prev = t[i];
+        }
+        return sb.toString();
     }
 
     /** Status code from a status line like "HTTP 200 OK", or -1. */
