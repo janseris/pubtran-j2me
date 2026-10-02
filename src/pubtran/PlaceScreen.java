@@ -217,6 +217,7 @@ public class PlaceScreen extends Canvas implements CommandListener {
 
     private void goBack() {
         cancelTypeTimer();
+        if (busy) PubtranApi.cancel("Zrušeno", true); // don't leave a suggest request running
         generation++; // drop any late suggest result
         back.refresh();
         App.disp.setCurrent(back);

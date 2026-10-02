@@ -34,7 +34,15 @@ public class RequestThread extends Thread {
             host.setLoading(true);
         }
         else {
-            App.disp.setCurrent(new LoadingScreen());
+            LoadingScreen ls = new LoadingScreen();
+            final Command cancel = new Command("Zrušit", Command.STOP, 0);
+            ls.addCommand(cancel);
+            ls.setCommandListener(new CommandListener() {
+                public void commandAction(Command c, Displayable d) {
+                    if (c == cancel) PubtranApi.cancel("Zrušeno", true);
+                }
+            });
+            App.disp.setCurrent(ls);
         }
 
         try {
@@ -45,6 +53,10 @@ public class RequestThread extends Thread {
         catch (Exception e) {
             if (host != null) host.setLoading(false);
             e.printStackTrace();
+            if (PubtranApi.cancelledByUser) { // "Zrušit": back without an error
+                App.disp.setCurrent(errorReturnScreen);
+                return;
+            }
             Alert alert = new Alert("Chyba požadavku", e.toString(), null, AlertType.ERROR);
             alert.setTimeout(Alert.FOREVER);
             App.disp.disp.setCurrent(alert, errorReturnScreen);

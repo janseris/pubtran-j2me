@@ -48,7 +48,8 @@ http.createServer((req, res) => {
     if (req.method === "POST" && url === "/results") { // test results POSTed by the app (TlsTestScreen)
         const chunks = []; req.on("data", d => chunks.push(d)); req.on("end", () => {
             fs.mkdirSync(path.join(dir, "uploads"), { recursive: true });
-            const out = path.join(dir, "uploads", new Date().toISOString().replace(/[:.]/g, "-") + "_results.txt");
+            const nm = (/[?&]name=([A-Za-z0-9_-]+)/.exec(req.url) || [0, "results"])[1];
+            const out = path.join(dir, "uploads", new Date().toISOString().replace(/[:.]/g, "-") + "_" + nm + ".txt");
             const body = Buffer.concat(chunks);
             fs.writeFileSync(out, body);
             console.log("  results saved:", out, "(" + body.length + " B)");

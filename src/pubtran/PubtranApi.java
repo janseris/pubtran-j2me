@@ -50,6 +50,40 @@ public class PubtranApi {
     /** Which call is in flight, e.g. "getroutesopt" - shown under the spinner. */
     public static String currentMethod = "";
 
+    // ============================== cancel / timeout ==============================
+
+    /**
+     * No data for this long (connecting, waiting for the response or between body
+     * chunks) aborts the request. On the 9300 a request normally answers in 1-3 s.
+     */
+    public static final int STALL_TIMEOUT_MS = 30000;
+    /** The request in flight (native transport), so cancel() can close it. */
+    private static volatile NativeHttp current;
+    /** Set by cancel(): the reason the request in flight was aborted. */
+    private static volatile String cancelReason;
+    /** True when the last failed request was cancelled by the user (no error alert). */
+    public static volatile boolean cancelledByUser;
+    /** Time of the last sign of life of the request in flight (start, progress). */
+    private static volatile long lastActivity;
+
+    /** Aborts the request in flight from another thread: "Zrušit" or the stall watchdog. */
+    public static void cancel(String reason, boolean byUser) {
+        final NativeHttp req = current;
+        if (req == null || cancelReason != null) return;
+        cancelReason = reason;
+        cancelledByUser = byUser;
+        // closing can block on the phone, so not on the UI thread
+        new Thread() {
+            public void run() {
+                req.abort();
+            }
+        }.start();
+    }
+
+    public static boolean isBusy() {
+        return current != null;
+    }
+
     // ============================== plumbing ==============================
 
     /**
@@ -179,12 +213,27 @@ public class PubtranApi {
                 connecting = false;
                 bytesTransferred = bytesRead;
                 bytesTotal = total;
+                lastActivity = System.currentTimeMillis();
             }
         });
+
+        current = req;
+        cancelReason = null;
+        cancelledByUser = false;
+        lastActivity = System.currentTimeMillis();
+        java.util.Timer watchdog = new java.util.Timer();
+        watchdog.schedule(new java.util.TimerTask() {
+            public void run() {
+                if (System.currentTimeMillis() - lastActivity > STALL_TIMEOUT_MS) {
+                    PubtranApi.cancel("Server neodpověděl " + (STALL_TIMEOUT_MS / 1000) + " s, požadavek zrušen", false);
+                }
+            }
+        }, 2000, 2000);
 
         long t = System.currentTimeMillis();
         try {
             req.getResponseCode();
+            lastActivity = System.currentTimeMillis();
             e.waitMs = System.currentTimeMillis() - t; // connect + TLS + request + server time (HttpConnection hides the parts)
             req.fillResponseInfo(e);
             // Read TLS info now - reading the body closes the connection, and a closed
@@ -193,9 +242,17 @@ public class PubtranApi {
             long t2 = System.currentTimeMillis();
             byte[] r = req.getResponseBytesWithProgress();
             e.downloadMs = System.currentTimeMillis() - t2;
+            if (cancelReason != null) throw new Exception(cancelReason);
             return r;
         }
+        catch (Exception ex) {
+            // the connection was closed by cancel(): report why, not the I/O error it caused
+            if (cancelReason != null) throw new Exception(cancelReason);
+            throw ex;
+        }
         finally {
+            watchdog.cancel();
+            current = null;
             // failed before the status arrived: try anyway (the handshake may have completed)
             if (e.tlsInfo == null) e.tlsInfo = req.captureTlsInfo();
         }

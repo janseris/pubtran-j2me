@@ -14,6 +14,7 @@ import javax.microedition.lcdui.*;
 public class LogScreen extends List implements CommandListener {
     private static final Command BACK_COMMAND = new Command("Zpět", Command.BACK, 0);
     private static final Command CLEAR_COMMAND = new Command("Smazat log", Command.SCREEN, 1);
+    private static final Command SEND_COMMAND = new Command("Odeslat log na PC", Command.SCREEN, 2);
 
     private final Displayable back;
     private Vector entries;
@@ -23,6 +24,7 @@ public class LogScreen extends List implements CommandListener {
         this.back = back;
         addCommand(BACK_COMMAND);
         addCommand(CLEAR_COMMAND);
+        addCommand(SEND_COMMAND);
         setCommandListener(this);
         reload();
     }
@@ -56,6 +58,19 @@ public class LogScreen extends List implements CommandListener {
         else if (c == CLEAR_COMMAND) {
             RequestLog.clear();
             reload();
+        }
+        else if (c == SEND_COMMAND) {
+            setTitle("Odesílání na PC...");
+            new Thread() {
+                public void run() {
+                    StringBuffer sb = new StringBuffer("=== Log požadavků, ")
+                        .append(System.getProperty("microedition.platform")).append(", ")
+                        .append(new java.util.Date().toString()).append(" ===\n");
+                    Vector v = RequestLog.getEntries();
+                    for (int i = 0; i < v.size(); i++) sb.append(((LogEntry) v.elementAt(i)).fullText()).append('\n');
+                    setTitle(PcUpload.post("requestlog", sb.toString()));
+                }
+            }.start();
         }
         else if (c == List.SELECT_COMMAND) {
             openSelected();

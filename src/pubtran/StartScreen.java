@@ -25,6 +25,8 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
     private static final Command NOW_COMMAND = new Command("Čas: teď", Command.SCREEN, 4);
     private static final Command INFO_COMMAND = new Command("Info", Command.HELP, 5);
     private static final Command EXIT_COMMAND = new Command("Konec", Command.EXIT, 6);
+    /** Shown only while a request runs (see setLoading). */
+    private static final Command CANCEL_COMMAND = new Command("Zrušit", Command.STOP, 0);
 
     static final int FROM = 0, TO = 1, VIA = 2, WHEN = 3, SEARCH = 4, LOG = 5, TLS_TEST = 6;
 
@@ -221,6 +223,8 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
 
     public void setLoading(boolean value) {
         loading = value;
+        if (loading) addCommand(CANCEL_COMMAND);
+        else removeCommand(CANCEL_COMMAND);
         repaint();
         if (loading) {
             Thread ticker = new Thread() {
@@ -256,12 +260,27 @@ public class StartScreen extends TileScreen implements CommandListener, LoadingH
         Spinner.draw(g, w / 2, cy - 6, size, spinnerFrame, BUTTON_FOCUS_COLOR, BG_COLOR);
 
         g.setColor(TEXT_COLOR);
-        g.drawString(PubtranApi.progressText(), w / 2, cy + size / 2 + 2, Graphics.TOP | Graphics.HCENTER);
+        int ty = cy + size / 2 + 2;
+        g.drawString(PubtranApi.progressText(), w / 2, ty, Graphics.TOP | Graphics.HCENTER);
+        g.drawString("Zrušit: Esc nebo menu", w / 2, ty + g.getFont().getHeight() + 2, Graphics.TOP | Graphics.HCENTER);
+    }
+
+    protected void keyPressed(int keyCode) {
+        // Esc (27) / Clear cancels the request in flight
+        if (loading && (keyCode == 27 || keyCode == -8)) {
+            PubtranApi.cancel("Zrušeno", true);
+            return;
+        }
+        super.keyPressed(keyCode);
     }
 
     // --- Commands -----------------------------------------------------------------
 
     public void commandAction(Command c, Displayable d) {
+        if (c == CANCEL_COMMAND) {
+            PubtranApi.cancel("Zrušeno", true);
+            return;
+        }
         if (loading) return;
         if (c == OPEN_COMMAND) {
             onTileSelected(selected);

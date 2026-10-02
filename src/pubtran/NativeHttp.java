@@ -26,6 +26,18 @@ public class NativeHttp extends StandardHTTP {
         return connection;
     }
 
+    /**
+     * Aborts the request from another thread (cancel / stall watchdog): closes the
+     * connection and its streams, so a read or getResponseCode() blocked in it fails.
+     */
+    public void abort() {
+        try { close(); } catch (Throwable e) {}
+        Object c = connection;
+        if (c instanceof javax.microedition.io.Connection) {
+            try { ((javax.microedition.io.Connection) c).close(); } catch (Throwable e) {}
+        }
+    }
+
     /** Status line + response headers into e. Call after getResponseCode(), before reading the body. */
     public void fillResponseInfo(LogEntry e) {
         if (!(connection instanceof HttpConnection)) return;

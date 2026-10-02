@@ -424,31 +424,8 @@ public class TlsTestScreen extends Form implements CommandListener, ItemCommandL
      * Plain HTTP: doesn't go through the TLS patch. Returns a short status for the screen.
      */
     private String sendResults() {
-        javax.microedition.io.HttpConnection hc = null;
-        java.io.OutputStream os = null;
-        try {
-            String pc = pcField.getString().trim();
-            if (pc.startsWith("http://")) pc = pc.substring(7);
-            if (pc.endsWith("/")) pc = pc.substring(0, pc.length() - 1);
-            byte[] body = lines.toString().substring(runStart).getBytes("UTF-8");
-            hc = (javax.microedition.io.HttpConnection) javax.microedition.io.Connector.open("http://" + pc + "/results");
-            hc.setRequestMethod(javax.microedition.io.HttpConnection.POST);
-            hc.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
-            hc.setRequestProperty("Content-Length", String.valueOf(body.length));
-            os = hc.openOutputStream();
-            os.write(body);
-            os.close();
-            os = null;
-            int code = hc.getResponseCode();
-            return code == 200 ? "Výsledky odeslány na PC." : "Odeslání na PC: HTTP " + code;
-        }
-        catch (Throwable e) {
-            return "Odeslání na PC selhalo: " + e;
-        }
-        finally {
-            try { if (os != null) os.close(); } catch (Throwable e) {}
-            try { if (hc != null) hc.close(); } catch (Throwable e) {}
-        }
+        PcUpload.address = pcField.getString();
+        return PcUpload.post("tlstest", lines.toString().substring(runStart));
     }
 
     public void commandAction(Command c, Displayable d) {

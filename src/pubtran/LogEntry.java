@@ -46,6 +46,21 @@ public class LogEntry {
     /** May itself just hold a note if nothing could be captured. */
     public TlsInfo tlsInfo;
 
+    /** Everything about this request as text (for sending the log to the PC). */
+    public String fullText() {
+        StringBuffer sb = new StringBuffer();
+        sb.append(new java.util.Date(timestamp).toString()).append("  ").append(method).append(' ').append(url).append('\n');
+        sb.append("  ").append(success ? "OK" : "CHYBA: " + errorMessage).append(", celkem ").append(durationMs).append(" ms");
+        if (waitMs >= 0) sb.append(", do odpovědi ").append(waitMs).append(" ms");
+        if (downloadMs >= 0) sb.append(", stahování ").append(downloadMs).append(" ms");
+        sb.append(", odesláno ").append(requestBytes).append(" B, přijato ").append(responseBytes).append(" B\n");
+        if (statusLine != null) sb.append("  ").append(statusLine).append('\n');
+        if (requestHeaders != null) sb.append("  > ").append(requestHeaders).append('\n');
+        if (responseHeaders != null && responseHeaders.length() > 0) sb.append("  < ").append(responseHeaders).append('\n');
+        if (tlsInfo != null) sb.append("  TLS: ").append(tlsInfo.toDetailText()).append('\n');
+        return sb.toString();
+    }
+
     public String summaryLine() {
         StringBuffer sb = new StringBuffer(path).append(" - ");
         if (!success) sb.append("CHYBA po ");
