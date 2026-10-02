@@ -18,6 +18,8 @@ http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split("?")[0]);
     console.log(new Date().toISOString().slice(11, 19), req.method, url, "from", req.socket.remoteAddress,
         "UA:", req.headers["user-agent"] || "-");
+    const extra = ["range", "if-range", "if-modified-since", "accept", "connection"].filter(h => req.headers[h]).map(h => h + "=" + req.headers[h]);
+    if (extra.length) console.log("  headers:", extra.join(" | "));
     if (req.method === "POST" && url === "/upload") { // file upload from the phone's browser
         const chunks = []; req.on("data", d => chunks.push(d)); req.on("end", () => {
             const body = Buffer.concat(chunks);
