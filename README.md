@@ -60,12 +60,21 @@ The UI itself has not been run on the phone yet.
 
 ## TLS measurements on the Nokia 9300
 
-Measured with the TLS test:
+Measured on 2026-10-02 with the HTTPS test (app 1.0.4) and the `ssladaptor` v8 log build from [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes`. The log build writes one summary line per connection. Results come from the app's results file and `SSLLog.txt`.
 
-- **jsonplaceholder.typicode.com:** HTTPS 7.3 s vs HTTP 1.4 s, so the TLS handshake costs **~5.9 s** (the EKA1 TLS patch does a full handshake on every connection).
-- **www.google.com, www.seznam.cz:** fail after ~3 s with *Unexpected end of stream*.
-- **pubtran-backend.mapy.cz:** stalls the phone until the USB internet link drops (Symbian error **-29**). Java TLS would avoid this, but can't run on the 9300 (see Building).
-- The causes (no SNI from Java, device-only failures) are reported in [symbian-tls#13](https://github.com/shinovon/symbian-tls/issues/13).
+| | Time |
+|---|---|
+| TLS handshake, full (ECDHE, ChaCha20/AES-GCM) | **~1.0 s** (seznam ~1.8 s) |
+| TLS handshake, resumed (session ID) | **~0.25 s** |
+| Whole request, from opening the connection to the response | ~2.0–2.9 s with a full handshake, ~1.2–1.6 s resumed |
+| Download over HTTPS (jquery 85 KB, three.js 589 KB, jsonplaceholder 73 KB) | **100–140 KB/s** |
+| Download over plain HTTP (100 KB, 1 MB) | ~107 KB/s |
+
+- **HTTPS is as fast as plain HTTP.** The earlier 1.8 KB/s came from the patch reading the socket one TLS field at a time (fixed in v7) and from the verbose log (each line costs ~15 ms; fixed in v8).
+- **pubtran-backend.mapy.cz works** with SNI taken from the request's `Host:` header. Its GET answer is HTTP 400, as expected: the API needs a FastRPC POST.
+- **Session resumption** works with servers that keep sessions by ID. cnn, example.com, npr, cdnjs and pubtran-backend resume; pubtran's 3rd attempt got a full handshake again, probably from a different backend server. Google, jsonplaceholder (Cloudflare), seznam and duckduckgo resume only with session tickets, which the BearSSL client doesn't support, so they always do a full handshake.
+- **Each `HttpConnection` is a new TCP and TLS connection.** The phone's browser keeps one connection for many requests, but Java can't.
+- The app shows the protocol as "SSL 3.0", which is wrong: the connection is TLS 1.2. The value comes from the patch's security info, not from the handshake.
 
 ## Java TLS / signing tests on the Nokia 9300
 
