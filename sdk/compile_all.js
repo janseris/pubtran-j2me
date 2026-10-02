@@ -7,20 +7,20 @@ const compileScript = win ? "powershell" : "sdk/compile.sh";
 const compileScriptArgs = win ? ["sdk\\compile.ps1"] : [];
 const classpathJoiner = win ? ";" : ":";
 
-// Every build gets a new MIDlet-Version (1.0.0 -> 1.0.1 ... 1.0.99 -> 1.1.0).
-// The Nokia 9300 refuses ("Invalid archive") a jar whose name, vendor and version match
-// an already known suite but whose content differs, even after uninstalling. With a new
+// Every build gets a new MIDlet-Version, as major.minor only (1.14 -> 1.15 ... 1.99 -> 2.0):
+// the Nokia 9300 shows just "major.minor", so a micro part can't be seen on the phone.
+// The 9300 refuses ("Invalid archive") a jar whose name, vendor and version match an
+// already known suite but whose content differs, even after uninstalling. With a new
 // version each build installs as an update. The number is kept in manifest.mf, so a commit
 // shows which version it built. Set NO_VERSION_BUMP=1 to build without changing it.
 if (!process.env.NO_VERSION_BUMP) {
   const fs = require('fs');
   const mf = fs.readFileSync('manifest.mf', 'utf8');
-  const m = /^MIDlet-Version: *(\d+)\.(\d+)\.(\d+)/m.exec(mf);
+  const m = /^MIDlet-Version: *(\d+)\.(\d+)(\.\d+)?/m.exec(mf);
   if (m) {
-    let [maj, min, mic] = [+m[1], +m[2], +m[3] + 1];
-    if (mic > 99) { mic = 0; min++; }
+    let [maj, min] = [+m[1], +m[2] + 1];
     if (min > 99) { min = 0; maj++; }
-    const v = `${maj}.${min}.${mic}`;
+    const v = `${maj}.${min}`;
     fs.writeFileSync('manifest.mf', mf.replace(m[0], `MIDlet-Version: ${v}`));
     console.log(`MIDlet-Version: ${v}`);
   }

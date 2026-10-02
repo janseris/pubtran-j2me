@@ -24,7 +24,7 @@ MIDlet-Icon: /icon.png
 //#endif
 MIDlet-Name: Jizdni rady
 MIDlet-Vendor: pubtran-j2me
-MIDlet-Version: 1.0.13
+MIDlet-Version: 1.14
 MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 //#ifdef NOKIA_S60_MANIFEST

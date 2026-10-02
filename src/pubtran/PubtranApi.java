@@ -358,7 +358,7 @@ public class PubtranApi {
         StringBuffer sb = new StringBuffer();
         long prev = r.tStart;
         long[] t = {r.tOpened, r.tStreamOpened, r.tWritten, r.tResponse};
-        String[] n = {"Connector.open", "openOutputStream (DNS+TCP+TLS?)", "zápis těla", "čekání na odpověď"};
+        String[] n = {"Connector.open", "openOutputStream", "zápis těla", "připojení+TLS+server (getResponseCode)"};
         for (int i = 0; i < t.length; i++) {
             if (sb.length() > 0) sb.append(", ");
             if (t[i] == 0) {
