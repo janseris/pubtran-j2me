@@ -53,10 +53,17 @@ public class PubtranApi {
     // ============================== cancel / timeout ==============================
 
     /**
-     * No data for this long (connecting, waiting for the response or between body
-     * chunks) aborts the request. On the 9300 a request normally answers in 1-3 s.
+     * No sign of life for this long (connecting, waiting for the response, between body
+     * chunks) gives up on that connection and tries a new one. On the 9300 a request
+     * answers in 2-8 s; a stuck one (seen: the server or link closing the connection
+     * after the ClientHello, or no answer at all) never recovers, while a new connection
+     * right after it works.
      */
-    public static final int STALL_TIMEOUT_MS = 60000;
+    public static final int STALL_TIMEOUT_MS = 15000;
+    /** Connections tried per call (after a stall or a connection error). */
+    public static final int ATTEMPTS = 3;
+    /** Which attempt is running (shown under the spinner from the 2nd one). */
+    public static volatile int attemptNo;
     /** The request in flight (native transport), so cancel() can close it. */
     private static volatile NativeHttp current;
     /** Set by cancel(): the reason the request in flight was aborted. */
@@ -74,14 +81,10 @@ public class PubtranApi {
      * its result is ignored (RequestThread.cancelActive / stall).
      */
     public static void cancel(String reason, boolean byUser) {
-        if (current == null || cancelReason != null) return;
+        if (cancelReason != null) return;
         cancelReason = reason;
         cancelledByUser = byUser;
-        release(); // don't make the next request wait for the abandoned one
     }
-
-    /** The thread running the request in flight (for the stall watchdog). */
-    private static volatile Thread owner;
 
     public static boolean isBusy() {
         return current != null;
@@ -119,22 +122,75 @@ public class PubtranApi {
         }
     }
 
-    public static FrpcStruct call(String method, FrpcStruct params) throws Exception {
-        acquire();
-        try {
+    /** One connection attempt of call(), run on its own thread so call() can give up on it. */
+    private static class Attempt extends Thread {
+        private final String method;
+        private final FrpcStruct params;
+        FrpcStruct result;
+        Exception error;
+        boolean done;
+
+        Attempt(String method, FrpcStruct params) {
+            this.method = method;
+            this.params = params;
+        }
+
+        public void run() {
             try {
-                return callLocked(method, params);
+                result = callLocked(method, params);
             }
-            catch (java.io.IOException ex) {
-                // A connection error before any response (e.g. the server or the phone's
-                // link closed the TCP connection right after the ClientHello, KErrEof):
-                // try once more on a new connection. Not after a cancel / timeout.
-                if (cancelReason != null) throw ex;
-                RequestLog.persist(new java.util.Date().toString() + "  opakuji " + method + " po chybě: " + ex + "\n");
-                return callLocked(method, params);
+            catch (Exception e) {
+                error = e;
+            }
+            synchronized (this) {
+                done = true;
+                notifyAll();
             }
         }
+    }
+
+    /**
+     * One API call: up to ATTEMPTS connections. A connection that shows no sign of life
+     * for STALL_TIMEOUT_MS is abandoned (NOT closed - closing it from another thread
+     * crashed the 9300) and a new one is tried; so is one that fails with an I/O error
+     * before the response. "Zrušit" (cancel) ends the call at once.
+     */
+    public static FrpcStruct call(String method, FrpcStruct params) throws Exception {
+        acquire();
+        cancelReason = null;
+        cancelledByUser = false;
+        try {
+            Exception last = null;
+            for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
+                attemptNo = attempt;
+                Attempt a = new Attempt(method, params);
+                lastActivity = System.currentTimeMillis();
+                a.start();
+                synchronized (a) {
+                    while (!a.done && cancelReason == null
+                            && System.currentTimeMillis() - lastActivity < STALL_TIMEOUT_MS) {
+                        try { a.wait(250); } catch (InterruptedException e) {}
+                    }
+                }
+                if (cancelReason != null) throw new Exception(cancelReason);
+                if (a.done) {
+                    if (a.error == null) return a.result;
+                    last = a.error;
+                    if (!(a.error instanceof java.io.IOException) || attempt == ATTEMPTS) throw a.error;
+                    RequestLog.persist(new java.util.Date().toString() + "  " + method + ": pokus " + attempt
+                        + " selhal (" + a.error + "), nové spojení\n");
+                }
+                else {
+                    NativeHttp r = current;
+                    RequestLog.persist(new java.util.Date().toString() + "  ZASEKNUTO: " + method + ", pokus " + attempt
+                        + ", fáze: " + (r != null ? phases(r) : "?") + " - nové spojení\n");
+                    last = new Exception("Server neodpověděl (" + attempt + "x " + (STALL_TIMEOUT_MS / 1000) + " s bez odezvy)");
+                }
+            }
+            throw last;
+        }
         finally {
+            attemptNo = 0;
             release();
         }
     }
@@ -266,24 +322,7 @@ public class PubtranApi {
         });
 
         current = req;
-        owner = Thread.currentThread();
-        cancelReason = null;
-        cancelledByUser = false;
         lastActivity = System.currentTimeMillis();
-        java.util.Timer watchdog = new java.util.Timer();
-        watchdog.schedule(new java.util.TimerTask() {
-            public void run() {
-                if (System.currentTimeMillis() - lastActivity > STALL_TIMEOUT_MS) {
-                    String why = "Server neodpověděl " + (STALL_TIMEOUT_MS / 1000) + " s, požadavek zrušen";
-                    // record it now: the request thread is stuck and may never get to finish()
-                    RequestLog.persist(new java.util.Date().toString() + "  ZASEKNUTO: " + currentMethod
-                        + ", fáze: " + phases(req) + "\n");
-                    PubtranApi.cancel(why, false);
-                    RequestThread.stall(owner, why);
-                    cancel();
-                }
-            }
-        }, 2000, 2000);
 
         long t = System.currentTimeMillis();
         try {
@@ -307,7 +346,6 @@ public class PubtranApi {
         }
         finally {
             e.phases = phases(req);
-            watchdog.cancel();
             if (current == req) current = null;
             // failed before the status arrived: try anyway (the handshake may have completed)
             if (e.tlsInfo == null) e.tlsInfo = req.captureTlsInfo();
@@ -366,7 +404,7 @@ public class PubtranApi {
         }
 //#endif
         if (connecting) {
-            return "Připojování... (" + currentMethod + ")";
+            return "Připojování... (" + currentMethod + (attemptNo > 1 ? ", pokus " + attemptNo : "") + ")";
         }
         if (bytesTotal <= 0) {
             return formatKB(bytesTransferred) + " přijato";
