@@ -14,13 +14,20 @@ It is a copy of this project's **discord-j2me** fork, reusing its build toolchai
 
 ## Working configuration (Nokia 9300)
 
-The app works on the phone only **together with the patched TLS library**. Java's `HttpConnection` (`https://`) goes through the phone's `SSLADAPTOR.dll`, and the 9300's original one can't do TLS 1.2. Tested and working on 2026-10-03:
+The app works on the phone only **together with the patched TLS library**. Java's `HttpConnection` (`https://`) goes through the phone's `SSLADAPTOR.dll`, and the 9300's original one can't do TLS 1.2. Tested and working on the phone:
 
 | Part | Version | Where |
 |---|---|---|
-| App | **1.1** (`MIDlet-Version`), tag `v1.1` | `bin/pubtran_s80.jar` + `.jad`, built from this repo |
+| App | **1.2** (`MIDlet-Version`), tag `v1.2`, tested 2026-10-04 | `bin/pubtran_s80.jar` + `.jad`, built from this repo |
 | TLS patch | **ssladaptor v10**, [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes` @ `26e5283` (tag `pubtran-v1.1`) | `phone/ssladaptor.dll` → phone `C:\System\Libs\ssladaptor.dll` |
 | BearSSL | [janseris/bearssl-symbian](https://github.com/janseris/bearssl-symbian) `eka1-fixes` @ `5b817d5` | compiled into the DLL |
+
+**App versions:**
+
+- **1.1** (tag `v1.1`): the first fully working version. Search, suggestions and the HTTPS test work, but the results, connection detail and trip screens are the phone's plain native white lists and forms, hard to read.
+- **1.2** (tag `v1.2`): the same networking, plus a real UI. Results, connection detail and trip are drawn as dark cards (the start screen's theme) with the Android app's line colours, vehicle icons and green/red delay pills, and a timeline for the trip.
+
+Both run with the same ssladaptor v10.
 
 `phone/ssladaptor_log.dll` is the same v10 with logging. It writes one summary line per connection to `C:\Logs\SSL\SSLLog.txt` when that folder exists. Install it as `ssladaptor.dll` only for diagnosis, and restart the phone after replacing the DLL. Older builds are in the main repo under `symbian-build/out/`.
 
