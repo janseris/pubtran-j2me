@@ -38,7 +38,7 @@ the problem go away.
 
 | Bug | Effect | Fix |
 |---|---|---|
-| After a failed handshake, the TLS patch left the next Send/Recv pending forever | the app hung on "Připojování", the phone froze | ssladaptor v10: the handshake error is kept, and every later request fails with it at once |
+| After a failed handshake, the TLS patch left the next Send/Recv pending forever | the app hung on "Připojování", the phone froze | ssladaptor v20-fix10: the handshake error is kept, and every later request fails with it at once |
 | "Zrušit" and the watchdog closed the `HttpConnection` from another thread | KERN-EXEC 3 in `jes-dd-java-comms`, freeze on the next request | never close it from another thread; abandon the request instead (1.0.8) |
 | 30 s timeout | dropped a slow but successful response (it arrived after 39 s) | stall detection plus retry (1.0.12) |
 | Several requests at once (suggest-as-you-type + search) | two TLS connections through the patch at the same time | one request at a time (1.0.8) |

@@ -19,7 +19,7 @@ The app works on the phone only **together with the patched TLS library**. Java'
 | Part | Version | Where |
 |---|---|---|
 | App | **1.2** (`MIDlet-Version`), tag `v1.2`, tested 2026-10-04 | `bin/pubtran_s80.jar` + `.jad`, built from this repo |
-| TLS patch | **ssladaptor v10**, [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes` @ `26e5283` (tag `pubtran-v1.1`) | `phone/ssladaptor.dll` → phone `C:\System\Libs\ssladaptor.dll` |
+| TLS patch | **ssladaptor v20-fix10**, [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes` @ `26e5283` (tags `v20-fix10`, `pubtran-v1.1`) | `phone/ssladaptor.dll` → phone `C:\System\Libs\ssladaptor.dll` |
 | BearSSL | [janseris/bearssl-symbian](https://github.com/janseris/bearssl-symbian) `eka1-fixes` @ `5b817d5` | compiled into the DLL |
 
 **App versions:**
@@ -27,9 +27,11 @@ The app works on the phone only **together with the patched TLS library**. Java'
 - **1.1** (tag `v1.1`): the first fully working version. Search, suggestions and the HTTPS test work, but the results, connection detail and trip screens are the phone's plain native white lists and forms, hard to read.
 - **1.2** (tag `v1.2`): the same networking, plus a real UI. Results, connection detail and trip are drawn as dark cards (the start screen's theme) with the Android app's line colours, vehicle icons and green/red delay pills, and a timeline for the trip.
 
-Both run with the same ssladaptor v10.
+Both run with the same ssladaptor v20-fix10.
 
-`phone/ssladaptor_log.dll` is the same v10 with logging. It writes one summary line per connection to `C:\Logs\SSL\SSLLog.txt` when that folder exists. Install it as `ssladaptor.dll` only for diagnosis, and restart the phone after replacing the DLL. Older builds are in the main repo under `symbian-build/out/`.
+**DLL naming:** `v20-fixN` is our Nth fix build on top of shinovon's symbian-tls release **v20**. His own releases are numbered v2 to v20, so our builds don't use a bare "vN".
+
+`phone/ssladaptor_log.dll` is the same v20-fix10 with logging. It writes one summary line per connection to `C:\Logs\SSL\SSLLog.txt` when that folder exists. Install it as `ssladaptor.dll` only for diagnosis, and restart the phone after replacing the DLL. Older builds are in the main repo under `symbian-build/out/`.
 
 **What the fork changes in shinovon/symbian-tls (EKA1 / S80v2), and why the app needs it:**
 
@@ -39,7 +41,7 @@ Both run with the same ssladaptor v10.
 - **Safe closing:**
   - Closing completes all pending requests and cancels the socket.
   - A `close_notify` arriving during a read isn't answered.
-  - After a failed handshake (e.g. the connection closed right after the ClientHello), every later request fails at once instead of hanging (v10). Before, this froze the phone.
+  - After a failed handshake (e.g. the connection closed right after the ClientHello), every later request fails at once instead of hanging (fix10). Before, this froze the phone.
 - **Speed:**
   - **Session resumption** across connections, stored in `C:\System\Data\ssl_sessions.dat`. A resumed handshake takes ~0.25 s instead of ~1 s, for servers that resume by session ID; pubtran-backend does.
   - **Leaf certificate only:** the chain isn't verified (`NO_VERIFY`, as in the original EKA1 build). This avoids a slow chain check that stalled the phone (-29).
@@ -103,7 +105,7 @@ The UI itself has not been run on the phone yet.
 
 ## TLS measurements on the Nokia 9300
 
-Measured on 2026-10-02 with the HTTPS test (app 1.0.4) and the `ssladaptor` v8 log build from [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes`. The log build writes one summary line per connection. Results come from the app's results file and `SSLLog.txt`.
+Measured on 2026-10-02 with the HTTPS test (app 1.0.4) and the `ssladaptor` v20-fix8 log build from [janseris/symbian-tls](https://github.com/janseris/symbian-tls) `eka1-java-fixes`. The log build writes one summary line per connection. Results come from the app's results file and `SSLLog.txt`.
 
 | | Time |
 |---|---|
@@ -113,7 +115,7 @@ Measured on 2026-10-02 with the HTTPS test (app 1.0.4) and the `ssladaptor` v8 l
 | Download over HTTPS (jquery 85 KB, three.js 589 KB, jsonplaceholder 73 KB) | **100–140 KB/s** |
 | Download over plain HTTP (100 KB, 1 MB) | ~107 KB/s |
 
-- **HTTPS is as fast as plain HTTP.** The earlier 1.8 KB/s came from the patch reading the socket one TLS field at a time (fixed in v7) and from the verbose log (each line costs ~15 ms; fixed in v8).
+- **HTTPS is as fast as plain HTTP.** The earlier 1.8 KB/s came from the patch reading the socket one TLS field at a time (fixed in fix7) and from the verbose log (each line costs ~15 ms; fixed in fix8).
 - **pubtran-backend.mapy.cz works** with SNI taken from the request's `Host:` header. Its GET answer is HTTP 400, as expected: the API needs a FastRPC POST.
 - **Session resumption** works with servers that keep sessions by ID. cnn, example.com, npr, cdnjs and pubtran-backend resume; pubtran's 3rd attempt got a full handshake again, probably from a different backend server. Google, jsonplaceholder (Cloudflare), seznam and duckduckgo resume only with session tickets, which the BearSSL client doesn't support, so they always do a full handshake.
 - **Each `HttpConnection` is a new TCP and TLS connection.** The phone's browser keeps one connection for many requests, but Java can't.
