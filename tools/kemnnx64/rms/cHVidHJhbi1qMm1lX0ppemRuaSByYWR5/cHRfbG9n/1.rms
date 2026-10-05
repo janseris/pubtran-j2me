@@ -1,0 +1,34 @@
+Sat Oct 03 01:16:53 CEST 2026  POST https://pubtran-backend.mapy.cz/api/v1/getroutesopt
+  OK, celkem 670 ms, do odpovědi 662 ms, stahování 1 ms, odesláno 324 B, přijato 20368 B
+  fáze: Connector.open 3 ms, openOutputStream 155 ms, zápis těla 0 ms, připojení+TLS+server (getResponseCode) 504 ms
+  HTTP 200 OK
+  > POST https://pubtran-backend.mapy.cz/api/v1/getroutesopt
+User-Agent: okhttp/5.4.0
+Accept: application/x-frpc-rest
+Content-Type: application/x-frpc-rest
+Content-Length: 324
+  < content-type: application/x-frpc-rest
+content-length: 20368
+x-envoy-upstream-service-time: 176
+set-cookie: sznlbr=1YCPv2gNYGEPPr26--_uOpKA.uUNWLoxVBeJZTba49fWh6o8rube0hNB0ltXruw-fCgw; HttpOnly; Secure; Max-Age=86400; Path=/
+date: Fri, 02 Oct 2026 23:17:15 GMT
+server: envoy
+  TLS: Není HTTPS spojení - TLS nebylo použito.
+
+Sat Oct 03 01:17:01 CEST 2026  POST https://pubtran-backend.mapy.cz/api/v1/getroutesopt
+  OK, celkem 147 ms, do odpovědi 140 ms, stahování 4 ms, odesláno 349 B, přijato 30899 B
+  fáze: Connector.open 3 ms, openOutputStream 58 ms, zápis těla 0 ms, připojení+TLS+server (getResponseCode) 79 ms
+  HTTP 200 OK
+  > POST https://pubtran-backend.mapy.cz/api/v1/getroutesopt
+User-Agent: okhttp/5.4.0
+Accept: application/x-frpc-rest
+Content-Type: application/x-frpc-rest
+Content-Length: 349
+  < content-type: application/x-frpc-rest
+content-length: 30899
+x-envoy-upstream-service-time: 52
+set-cookie: sznlbr=1YCIL3gNYGEPPr26-u4ufybA.DzCVoeo9j5qxKbB1xp1pO666MVpyFf_OUqzZv_3Fefo; HttpOnly; Secure; Max-Age=86400; Path=/
+date: Fri, 02 Oct 2026 23:17:22 GMT
+server: envoy
+  TLS: Není HTTPS spojení - TLS nebylo použito.
+
