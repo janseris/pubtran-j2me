@@ -145,7 +145,7 @@ All signatures verify on the PC (`openssl dgst -sha1 -verify`). Over the air, th
 
 ### Over-the-air install test
 
-`ota/` has signed SignTest MIDlets and `ota_server.js`, a small HTTP server with the MIDP MIME types that rewrites `MIDlet-Jar-URL` to an absolute URL. Run `node ota_server.js` in that folder, then open `http://<PC address>:8000/` in the phone's browser and pick a `.jad`. SignTest's *Socket test* shows whether `socket://` is allowed.
+These tests used the over-the-air server, a small HTTP server with the MIDP MIME types that rewrites `MIDlet-Jar-URL` to an absolute URL. It now lives only in [android-to-j2me-kit](https://github.com/janseris/android-to-j2me-kit) (`nokia9300/ota/`, shared by all the apps): run `start_ota_server.bat` there, then open `http://<PC address>:8000/` in the phone's browser and pick a `.jad`. SignTest's *Socket test* shows whether `socket://` is allowed.
 
 ## Building
 
@@ -160,7 +160,7 @@ Output: `bin/pubtran_s80.jar` (unsigned, native TLS). Install the `.jar` as befo
 
 **Every build gets a new `MIDlet-Version`.** `sdk/compile_all.js` raises it in `manifest.mf` as *major.minor* (1.1 → 1.2 …, because the phone shows only two numbers), so install a new build over the old one as an update. Check the version in the phone's application manager after installing. The 9300 rejects a jar with the same name, vendor and version as a suite it already knows but different content, as "Neplatný archív aplikace" (invalid archive). This happened even after uninstalling, and whether the jar came over the browser or Bluetooth. A jar with a different `MIDlet-Name` installs too, as a second app. To build without the bump, set `NO_VERSION_BUMP=1`.
 
-Keep the `.jad` and `.jar` from the same build together. Nokia Application Installer (PC Suite 6.6) and the browser use the `.jad` when it is there, and a `.jad` from an older build has the wrong `MIDlet-Version` and `MIDlet-Jar-Size`. The phone then reports "Neplatný archív aplikace" too. A `.jar` sent alone, over Bluetooth or the browser, doesn't need the `.jad`. The server in `ota/` (`start_ota_server.bat`, port 8000) serves the jar and the TLS DLLs, and has an `/upload` page for sending logs from the phone to the PC.
+Keep the `.jad` and `.jar` from the same build together. Nokia Application Installer (PC Suite 6.6) and the browser use the `.jad` when it is there, and a `.jad` from an older build has the wrong `MIDlet-Version` and `MIDlet-Jar-Size`. The phone then reports "Neplatný archív aplikace" too. A `.jar` sent alone, over Bluetooth or the browser, doesn't need the `.jad`. The over-the-air server is android-to-j2me-kit's `nokia9300/ota/` (`start_ota_server.bat`, port 8000; one server for all the apps): copy `bin/pubtran_s80.jar` + `.jad` there. It serves the jars, `.sis` files and the TLS DLLs, and has an `/upload` page and `/results` for sending logs from the phone to the PC.
 
 - `build.json` has these targets:
   - `pubtran_s80`: the release build (unsigned, native TLS), ProGuard-obfuscated.
